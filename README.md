@@ -8,7 +8,6 @@ La version 3 du projet est basée sur la version 2 et introduit les éléments s
 
 - Association semi-automatique du capteur et de la centrale.
 - Lors de l'association du capteur et de la centrale le capteur informe automatiquement la centrale du ou des capteurs connectés, des grandeurs mesurées ainsi que de l'ordre dans lequel ces informations seront transmises à la centrale par chaque capteur. 
-- Ajout d'une cellule photovoltaïque pour la recharge en continu de la batterie du capteur.
 
 ## Schéma de principe
 https://github.com/JOM52/esp32-airsens-v3/blob/main/schema/airsens_v3_0%20schema%20de%20principe.odg
@@ -28,6 +27,10 @@ On peut aussi utiliser des capteurs hdc1080 qui mesurent seulement la températu
 ### Hardware
 
 Le hardware ESP32 est un microcontrôleur qui intègre des fonctionnalités de Wi-Fi et de Bluetooth, ainsi que des modules de gestion de l'alimentation, des filtres et des amplificateurs. Il peut se connecter à différents types de capteurs I2C, un protocole de communication série synchrone. 
+
+#### Evolutions:
+
+- Ajout d'une cellule photovoltaïque pour la recharge en continu de la batterie du capteur.
 
 ### Software
 
@@ -127,24 +130,22 @@ Le fichier de configuration est un fichier standard Micropython.
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-file: airsens_central_v2.py 
+file: airsens_central_conf.py 
+
 author: jom52
 email: jom52.dev@gmail.com
-github: https://github.com/JOM52/esp32-airsens-v2
+github: https://github.com/JOM52/esp32-airsens-class
 
 v0.4.0 : 05.02.2023 --> first prototype
 v0.4.1 : 05.03.2023 --> small changes Venezia
-v2.0.0 : 11.04.2023 --> adapté pour la version 2
 """
 from ubinascii import hexlify
 from machine import unique_id
-
 #SYSTEM
-WAIT_TIME_ON_RESET = 300 # seconds to wait before the machine reset in case of error
-
+WAIT_TIME_ON_RESET = 10 # seconds to wait before the machine reset in case of error
 # MQTT
 BROKER_IP = '192.168.1.108'
-TOPIC = 'airsens_domoticz'
+TOPIC = 'airsens_v2'
 BROKER_CLIENT_ID = hexlify(unique_id())
 
 # TTGO
@@ -153,11 +154,11 @@ BUTTON_PAGE_PIN = 0
 DEFAULT_MODE = 0 # Mode auto
 DEFAULT_ROW_ON_SCREEN = 5 # given by the display hardware and the font size
 CHOICE_TIMER_MS = 1000 # milli seconds
-REFRESH_SCREEN_TIMER_MS = 10000 # mode auto: display next location each ... milli seconds
 BUTTON_DEBOUNCE_TIMER_MS = 10 # milli seconds
+REFRESH_SCREEN_TIMER_MS = 20000 # mode auto: display next location each ... milli seconds
 
 # WIFI
-WIFI_WAN = 'jmb-home'
+WIFI_WAN = 'jmb-airsens'
 WIFI_PW = 'lu-mba01'
 
 # BATTERY
@@ -167,14 +168,14 @@ BAT_OK = 3.4 # si ubat plus grand -> ok
 BAT_LOW = 3.3 # si ubat plus petit -> alarm
 BAT_PENTE = (100-0)/(BAT_MAX-BAT_MIN)
 BAT_OFFSET = 100 - BAT_PENTE * BAT_MAX
-print('% = ' + str(BAT_PENTE) + ' + ' + str(BAT_OFFSET))
+# print('Charge bat % = ' + str(BAT_PENTE) + ' * Ubat' + ' + ' + str(BAT_OFFSET))
+
 ```
 
 #### Code de la centrale évolution
 
 *Dans une prochaine version il est prévu de modifier le programme pour:*
 
-- *introduire un processus d'identification et d'enregistrement des capteurs par la centrale. Ainsi seuls des capteurs reconnus, validés et enregistrés seront autorisés à transmettre des mesures à la centrale.*
 - *de crypter les message pour empêcher que les messages soient lus par des entités non autorisées.*
 
 ### Hardware
@@ -189,48 +190,9 @@ La centrale utilise un circuit Lilygo-ttgo qui comprend le processeur, une inter
 
 ### Connection réseau attribution des canaux
 
-Il faut désactiver l'attribution automatique des canaux sur le routeur Wi-Fi : si le routeur Wi-Fi de votre réseau Wi-Fi est configuré pour attribuer automatiquement le canal Wi-Fi, il peut changer le canal du réseau s'il détecte des interférences provenant d'autres routeurs Wi-Fi. Lorsque cela se produit, les appareils ESP connectés au réseau Wi-Fi changeront également de canal pour correspondre au routeur, mais les appareils ESPNow uniquement resteront sur le canal précédent et la communication sera perdue. Pour atténuer cela, configurez votre routeur Wi-Fi pour qu'il utilise un canal Wi-Fi fixe ou configurez vos appareils pour analyser à nouveau les canaux Wi-Fi s'ils ne parviennent pas à trouver leurs homologues attendus sur le canal actuel.
+Il faut désactiver l'attribution automatique des canaux sur le routeur Wi-Fi : si le routeur Wi-Fi de votre réseau Wi-Fi est configuré pour attribuer automatiquement le canal Wi-Fi, il peut changer le canal du réseau s'il détecte des interférences provenant d'autres routeurs Wi-Fi. Lorsque cela se produit, les appareils ESP connectés au réseau Wi-Fi changeront également de canal pour correspondre au routeur, <u>mais les appareils ESPNow uniquement resteront sur le canal précédent et la communication sera perdue</u>. Pour corriger cela, configurez votre routeur Wi-Fi pour qu'il utilise un canal Wi-Fi fixe ou configurez vos appareils pour analyser à nouveau les canaux Wi-Fi s'ils ne parviennent pas à trouver leurs homologues attendus sur le canal actuel.
 
 Il faut configurer le sensor pour utiliser le même canal (channel) que le router wifi. Le canal utilisé par la centrale peut être trouvée dans le menu ABOUT. C'est cette valeur qui doit être introduite dans le fichier de configuration du sensor p. ex.: WIFI_CHANNEL = 1
-
-## MQTT mosquitto
-
-Le logiciel MQTT fonctionne comme un éditeur (*broker*). Il est à l'écoute des auteur (*publishers*) qui publient des données et les diffuse auprès des abonnés (*subscribers*).
-
-MQTT est installé comme un service sur un Raspberry PI. Il reçoit les informations transmises par les auteurs qui publient les données (les capteurs) et les rediffuse vers tous les abonnés sans aucun contrôle de validité. Son rôle se limite à faire transiter les données depuis les auteurs vers les abonnés. La responsabilité de la validation et du contrôle des données est laissé à la centrale.
-
-Pour recevoir les données depuis le broker il suffit souscrire au broker sur le TOPIC concerné.
-
------------ *description de l'installation et de la configuration de MQTT à placer ici*  ----------
-
-## Programme python airsens_mqtt
-
-C'est un programme Python qui s'abonne à des topics MQTT pour les capteurs dont les données doivent être enregistrées dans une base de données. Ce programme est installé comme un service sur le raspberry PI. 
-
-Il consulte le fichier de configuration de la centrale pour connaitre les mac-adress des capteurs reconnus par la centrale.
-
-Il reçoit les données depuis MQTT, vérifie que le capteur est reconnu et, si oui, les enregistre dans la base de données airsens sur MariaDB (anciennement MySql) sur le Raspberry PI .
-
-Ce programme se charge également d'alarmer l'utilisateur (par un mail, un WhatsApp ou autre) lorsque l'accumulateur d'un capteur doit être rechargé. 
-
-*description de l'installation d'un service sur RPI à placer ici*
-
-## Programme de domotique
-
-Les mesures des capteurs peuvent être transmises à un logiciel de domotique (domoticz, jeedom, ...) pour être représentés graphiquement ou intervenir dans différentes alarmes. 
-
-La gestion des messages à destination des logiciels de domotique se font pour chaque logiciel  (domoticz, jeedom, ...) dans une classe spécifique.
-
-Pour Domoticz, le format des messages est le suivant:
-
- {  "**command**": "udevice",  "**idx**" : 7,  "**nvalue**" : 0,  "**svalue**" : "90;2975.00", "**parse**": false } avec:
-
-- **command**: udevice pour un capteur
-- **idx**: index du capteur dans domoticz
-- **nvalue**: sans importance pour un capteur
-- **svalue**: valeurs mesurées p.ex. température; humidité; pression, ...
-
-plus de détails: https://piandmore.wordpress.com/2019/02/04/mqtt-out-for-domoticz/
 
 ## Corrections à apporter
 
@@ -238,17 +200,14 @@ plus de détails: https://piandmore.wordpress.com/2019/02/04/mqtt-out-for-domoti
 
 - [ ] Compléter le topic par le type de capteur et un id unique pour pouvoir assurer de différentier chaque capteur donc 
   le TOPIC sera constitué comme suit: SENSOR_LOCATION / SENSOR_TYPE / SENSOR_ID 
-- [ ] Adapter le programme airsens_v2_jeedom.py au nouveau TOPIC
-- [ ] Adapter la table airsens_v2 dans la base de données airsens sur le RPI 139 pour le nouveau TOPIC
 - [ ] Analyser si la possibilité d'avoir plusieurs sensors sur un seul capteur à du sens et si non supprimer le code correspondant
-- [ ] Prévoir de désactiver les messages pour le suivi par Jeedom si le sensor est sur batterie (ON_BATTERY = False)
 - [ ] Modifier la valeur du condensateur (C3) (tester 10uF) pour que le reset se fasse à l'enclenchement du sensor
 - [ ] Etudier si l'implémentation du FTDI sur le capteur à du sens ou s'il rester avec un FTDI externe
 
 #### Central
 
-- [ ] Analyser pourquoi le programme se plante et ne redémarre pas en cas de coupure réseau
-- [ ] Corriger : En cas de coupure réseau, le central se perd et ne redémarre pas automatiquement
+- [ ] Corriger : En cas de coupure réseau, le central se perd et ne redémarre pas automatiquement 
+  - Le problème est le changement de canal par le router WIFI.  Voir: "Connection réseau attribution des canaux" ci-dessus
 
 #### Communications Central-Capteurs
 
