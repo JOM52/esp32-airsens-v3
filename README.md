@@ -11,9 +11,7 @@ La version 3 du projet est basée sur la version 2 et introduit les éléments s
 - Ajout d'une cellule photovoltaïque pour la recharge en continu de la batterie du capteur.
 
 ## Schéma de principe
-***.......... lien GitHub à ajouter ..........***
-
-
+https://github.com/JOM52/esp32-airsens-v3/blob/main/schema/airsens_v3_0%20schema%20de%20principe.odg
 
 ## Elément capteur:
 
