@@ -20,6 +20,7 @@ La version V1.0 proto du hardware fonctionne bien. Le hardware sera complétée 
 Pour réduire la consommation d'énergie, cette version hard ne contient que l'essentiel pour faire fonctionner le capteur. La configuration se fait par une interface FTDI (USB to UART) qui se branche au besoin et, si la cellule photovoltaïque ne suffit à maintenir la batterie en charge, les batteries se rechargent à part.
 
 Dans l'exemple ci-après, le capteur est un BME 280 qui permet la mesure de la température, du taux d'humidité et de la pression atmosphérique.
+
 https://github.com/JOM52/esp32-airsens-v3/blob/main/schema/airsens_v3_0.kicad_sch
 
 On peut aussi utiliser des capteurs hdc1080 qui mesurent seulement la température et l'humidité relative.
