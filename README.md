@@ -7,26 +7,22 @@ Version 3
 La version 3 du projet est basée sur la version 2 et introduit les éléments suivants:
 
 - Association semi-automatique du capteur et de la centrale.
-- Lors de l'association du capteur et de la centrale le capteur informe automatiquement la centrale du ou des capteurs connectés, des grandeurs mesurées ainsi que de l'ordre dans lequel ces informations seront transmises à la centrale par chaque capteur. 
+- Lors de l'association du capteur et de la centrale le capteur informe automatiquement la centrale du ou des sensors connectés, des grandeurs mesurées ainsi que de l'ordre dans lequel ces informations seront transmises à la centrale par chaque capteur. 
 
 ## Schéma de principe
 https://github.com/JOM52/esp32-airsens-v3/blob/main/schema/airsens_v3_0%20schema%20de%20principe.odg
 
 ## Elément capteur:
 
-La version V1.0 proto du hardware fonctionne bien. Le hardware sera complétée avec un bouton et une led pour démarrer et contrôler le processus d'association du capteur avec la centrale. 
+La version V1.0 proto du hardware fonctionne bien. Dans cette nouvelle version, le hardware est complétée avec un bouton et une led pour démarrer et contrôler le processus d'association du capteur avec la centrale. 
 
-Pour réduire la consommation d'énergie, cette version hard ne contient que l'essentiel pour faire fonctionner le capteur. La configuration se fait par une interface FTDI (USB to UART) qui se branche au besoin et, si la cellule photovoltaïque ne suffit à maintenir la batterie en charge, les batteries se rechargent à part.
-
-Dans l'exemple ci-après, le capteur est un BME 280 qui permet la mesure de la température, du taux d'humidité et de la pression atmosphérique.
+Pour réduire la consommation d'énergie, cette version hard ne contient que l'essentiel pour faire fonctionner le capteur. La configuration se fait, depuis le PC,  par une interface FTDI (USB to UART) qui se branche au besoin et, les batteries se rechargent à part.
 
 https://github.com/JOM52/esp32-airsens-v3/blob/main/schema/airsens_v3_0.kicad_sch
 
-On peut aussi utiliser des capteurs hdc1080 qui mesurent seulement la température et l'humidité relative.
-
 ### Hardware
 
-Le hardware ESP32 est un microcontrôleur qui intègre des fonctionnalités de Wi-Fi et de Bluetooth, ainsi que des modules de gestion de l'alimentation, des filtres et des amplificateurs. Il peut se connecter à différents types de capteurs I2C, un protocole de communication série synchrone. 
+Le hardware ESP32 est un microcontrôleur qui intègre des fonctionnalités de Wi-Fi et de Bluetooth, ainsi que des modules de gestion de l'alimentation, des filtres et des amplificateurs. Il peut se connecter à différents types de capteurs I2C, le protocole de communication série synchrone ESP-now. 
 
 #### Evolutions:
 
@@ -34,19 +30,21 @@ Le hardware ESP32 est un microcontrôleur qui intègre des fonctionnalités de W
 
 ### Software
 
-Ce projet implémente les drivers pour les capteurs de type BME280, BME680 et HDV1080. Ces capteurs permettent de mesurer différentes grandeurs liées au climat ou à l'environnement. Dans la version 2 du projet, on peut choisir le type et le nombre de capteurs à utiliser dans le fichier de configuration. Toutefois, il faut tenir compte de l'impact sur la consommation d'énergie et la durée de vie de la batterie. Avec une batterie Li-Ion de 2Ah (type 18650), on peut, avec un seul capteur,  réaliser une mesure toutes les 5 minutes pendant environ un an.
+Ce projet implémente les drivers pour les capteurs de type BME280, BME680 et HDC1080. Ces capteurs permettent de mesurer différentes grandeurs liées au climat ou à l'environnement. Depuis la version 2 du projet, on peut choisir le type et le nombre de capteurs à utiliser dans le fichier de configuration. Cette possibilité doit être utilisée à bon escient en tenant compte de l'impact sur la consommation dons sur l'autonomie de la batterie. Avec une batterie Li-Ion de 2Ah (type 18650), on peut, avec un seul capteur,  en prenant une mesure toutes les 5 minutes avoir un autonomie d'environ un an.
 
 #### Fichier de configuration du capteur
 
 Le fichier de configuration permet de personnaliser le fonctionnement d'un capteur sans avoir à modifier le code source. Il contient des lignes de code en Micropython qui assignent des valeurs à des variables globales. Ces variables sont ensuite utilisées par le programme principal pour paramétrer les différents éléments du système. Le fichier de configuration n'a pas besoin d'une structure particulière, mais il peut être organisé en sections pour faciliter la lecture et la compréhension.
 
-Le code ci-après permet de configurer un capteur connecté à un ESP32 qui utilise le protocole ESP-now pour envoyer des données à un proxy. Le capteur peut être de type hdc1080, bme280 ou bme680 et mesure la température, l'humidité, la pression, le gaz et l'altitude selon le cas. 
+Le code ci-après permet de configurer un capteur connecté à un ESP32. Le capteur peut être de type hdc1080, bme280 ou bme680 et mesure la température, l'humidité, la pression, le gaz et l'altitude selon le cas. 
 
-Le capteur est alimenté par une batterie et entre en mode deepsleep entre chaque acquisition pour économiser de l'énergie. La tension de la batterie est mesurée par un pont diviseur de tension. 
+Le capteur est alimenté par une batterie Li-Ion de 3.7V (3.2V - 4.2V) - type 6850. Pour économiser l'énergie consommée, le capteur est placé en ***deepsleep*** entre chaque mesure. Le temps de sommeil est défini dans le fichier de configuration. Lors d'un éveil, le capteur lit le fichier de configuration, initialise les constantes, charge les librairies nécessaire, initialise le capteur, fait la mesure, mesure l'état de la batterie, transmets les valeurs à la centrale puis se met en ***deepsleep***
+
+La tension de la batterie est mesurée par un pont diviseur de tension. 
 
 Le code utilise les constantes définies au début du fichier pour paramétrer les différents éléments du système. Par exemple, SENSOR_LOCATION indique le nom du capteur, T_DEEPSLEEP_MS indique la durée du mode deepsleep en millisecondes, SENSORS indique les types de capteurs disponibles et leurs mesures associées, ON_BATTERY indique si le capteur est alimenté par une batterie ou non, etc. 
 
-L'association capteur-centrale se fait "à la main" en renseignant le champ PROXY_MAC_ADRESS avec la MAC_ADRESS de la centrale dans le fichier de configuration du capteur.
+L'association capteur-centrale .............................. à compléter ................................................
 
 Le code ci-dessous montre un exemple de fichier de configuration pour ce système:
 
@@ -98,10 +96,6 @@ Les grandeurs mesurées sont dépendantes des possibilités du capteur par exemp
 - BME680  : température, humidité, pression, qualité de l'air
 
 Les valeurs transmises à MQTT sont fonction de la configuration définie dans le fichier _conf du capteur.
-
-#### Principe du logiciel capteur
-
-Pour économiser l'énergie consommée, le capteur est placé en ***deepsleep*** entre chaque mesure. Le temps de sommeil est défini dans le fichier de configuration, en principe 5 minutes. Lors d'un éveil, le capteur lit le fichier de configuration, initialise les constantes, charge les librairies nécessaire, initialise le capteur, fait la mesure, mesure l'état de la batterie, transmets les valeurs à la centrale puis se met en ***deepsleep***
 
 ## Centrale
 
