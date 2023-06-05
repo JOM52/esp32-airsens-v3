@@ -28,18 +28,27 @@ v2.0.0 : 02.04.2023 --> New data concept
 v2.0.1 : 21.04.2023 --> Small cosmetic changes
 v2.0.2 : 22.04.2023 --> improved espnow message sending by fixing the wifi channel
 v2.0.3 : 26.04.2023 --> Added TO_PRINT in conf file 
+----------------------------------------------------------------------
+v3.0.0 : 30.05.2023 --> Begin with version3 of hard ans soft. News are:
+                        - Semi-automatic pairing between capteur and centrale
+                        - During the pairing the sensor automatically informs the central of:
+                                - the connected sensor(s),
+                                - the measured quantities.
+v3.0.1 : 30.05.2023 --> implémentation logiciel de la led et du bouton pour le pairage (éléments de base)
 """
+
 from utime import ticks_ms, sleep_ms
 start_time = ticks_ms()
 # PARAMETERS ========================================
-PRG_NAME = 'airsens_sensor_v2'
-PRG_VERSION = '2.0.3'
+PRG_NAME = 'airsens_sensor_v3'
+PRG_VERSION = '3.0.0'
 from ubinascii import hexlify, unhexlify
-import airsens_sensor_conf_v2 as conf  # configuration file
-from machine import Pin, freq, TouchPad
-from machine import ADC, SoftI2C, deepsleep
+import airsens_sensor_conf_v3 as conf  # configuration file
+from machine import Pin, freq, TouchPad, reset_cause
+from machine import ADC, SoftI2C, deepsleep, Timer, DEEPSLEEP_RESET, EXT0_WAKE, HARD_RESET
 from sys import exit
 from lib.log_and_count import LogAndCount
+import esp32
 log = LogAndCount()
 if 'bme280' in conf.SENSORS:
     import lib.bme280 as bme280
@@ -54,9 +63,29 @@ pot = ADC(Pin(conf.ADC1_PIN))
 pot.atten(ADC.ATTN_6DB ) # Umax = 2V
 pot.width(ADC.WIDTH_12BIT) # 0 ... 4095
 
+LED = Pin(conf.LED_PIN, Pin.OUT)
+BTN_PAIR = Pin(conf.BUTTON_PAIR_PIN, mode = Pin.IN, pull=Pin.PULL_UP)
+PAIR_STATUS = not BTN_PAIR.value()
 
+def blink_led(freq='high', n_repeat=3):
+    if freq =='high': t_ms = 100
+    elif freq == 'med': t_ms = 200
+    elif freq == 'low': t_ms = 400
+    for n in range(n_repeat):
+        LED.on()
+        sleep_ms(t_ms)
+        LED.off()
+        sleep_ms(t_ms)
+    
 def main():
     
+    if PAIR_STATUS:
+        blink_led('high', 7)
+        sleep_ms(500)        
+        blink_led('med', 5)
+        sleep_ms(500)        
+        blink_led('low', 3)
+        sleep_ms(500)        
     try:
         bin_mac_adress = unhexlify(conf.PROXY_MAC_ADRESS.replace(':',''))
         if conf.TO_PRINT:
@@ -80,8 +109,8 @@ def main():
             elif sensor_actif == 'hdc1080':
                 sensor = hdc1080.HDC1080(i2c=i2c)
             
-            sensor_cpl = sensor_actif[0] + sensor_actif[3]
-            msg = 'jmb,'  + conf.SENSOR_LOCATION + '_' + sensor_cpl + ',' + sensor_actif +',' 
+            sensor_cpl = '' #'_' + sensor_actif[0] + sensor_actif[3]
+            msg = 'jmb,'  + conf.SENSOR_LOCATION + sensor_cpl + ',' + sensor_actif +',' 
             measurement_list = conf.SENSORS.get(sensor_actif)
             for measurement in measurement_list:
                 value = 0
@@ -143,6 +172,7 @@ def main():
                 print('passe', i, '- error count:', log.counters('error', False), '- msg missed:', log.counters('missed', False), '-->' , str(total_time) + 'ms')
                 print('going to deepsleep for: ' + str(t_deepsleep) + ' ms')
                 print('=================================================')
+
             else:
                 print(str(total_time) + 'ms')
             deepsleep(t_deepsleep)
@@ -153,6 +183,9 @@ def main():
                 if conf.TO_PRINT: print('going to endless deepsleep in ' + str(pass_to_wait - i) + ' s')
                 sleep_ms(1000)
             log.log_error('Endless deepsleep due to low battery Ubat=' + str(bat) , to_print = True)
+
+            #level parameter can be: esp32.WAKEUP_ANY_HIGH or esp32.WAKEUP_ALL_LOW
+#             esp32.wake_on_ext0(pin = wake1, level = esp32.WAKEUP_ALL_LOW)
             deepsleep()
         
     except Exception as err:

@@ -1,2 +1,2 @@
-import airsens_sensor_v2 as prg
+import airsens_sensor_v3 as prg
 prg.main()

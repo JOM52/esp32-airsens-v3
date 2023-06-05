@@ -1,11 +1,11 @@
 # acquisitions
-SENSOR_LOCATION = 'domo_2' 
-T_DEEPSLEEP_MS = 300000
+SENSOR_LOCATION = 'solar_v3b' 
+T_DEEPSLEEP_MS = 10000
 # sensor
 SENSORS = {
     'hdc1080':['temp', 'hum'],
     'bme280':['temp', 'hum', 'pres'],
-    'bme680':['temp', 'hum', 'pres', 'gas', 'alt'],
+#     'bme680':['temp', 'hum', 'pres', 'gas', 'alt'],
   }
 # power supply
 TO_PRINT = True
@@ -24,8 +24,11 @@ ADC1_PIN = 35 # Measure of analog voltage (ex: battery voltage following)
 AVERAGING = 1
 AVERAGING_BAT = 1
 AVERAGING_BME = 1
-
 # ESP-now
 PROXY_MAC_ADRESS = '3C:61:05:0D:67:CC'
 WIFI_CHANNEL = 1
+# PAIR
+LED_PIN = 12
+BUTTON_PAIR_PIN = 14 # no du port gpio
+
 

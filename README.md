@@ -2,29 +2,37 @@
 
 Version 3
 
-**esp32-airsens** est un projet de domotique qui consiste à créer des capteurs intelligents et connectés pour surveiller l'environnement. Ces capteurs sont basés sur le processeur ESP32 et le langage Micropython. Ils peuvent mesurer différents paramètres tels que la température, l'humidité, la pression atmosphérique et le niveau de charge de batterie. Ils envoient ensuite ces données à une centrale via un réseau sans fil. La centrale est un système Liligo-TTGO qui reçoit les données des capteurs, les publie sur un broker MQTT et les affiche sur un écran. L'écran permet de visualiser les informations pertinentes pour chaque capteur.
+Dénomination des éléments:
+
+- Capteur: composant qui permet la mesures d'une ou plusieurs grandeurs physiques;
+- Terminal de mesure: microcontrôleur qui contrôle un ou plusieurs capteurs et se charge de transmettre les données vers une centrale;
+- Centrale: microcontrôleur qui reçoit les données d'un ou plusieurs terminaux de mesure et qui les transmets vers un serveur domotique de type MQTT
+
+**esp32-airsens** est un projet de domotique qui consiste à créer des terminaux de mesure intelligents et connectés pour surveiller l'environnement. Ils sont basés sur le processeur ESP32 et le langage Micropython. Ils peuvent mesurer différents paramètres tels que la température, l'humidité, la pression atmosphérique et le niveau de charge de batterie. Ils envoient ensuite ces données à une centrale via un réseau sans fil. La centrale est un système Liligo-TTGO qui reçoit les données des terminaux de mesure, les publie sur un broker MQTT et les affiche sur un écran. L'écran permet de visualiser les informations pertinentes pour chaque terminal de mesure.
 
 La version 3 du projet est basée sur la version 2 et introduit les éléments suivants:
 
-- Association semi-automatique du capteur et de la centrale.
-- Lors de l'association du capteur et de la centrale le capteur informe automatiquement la centrale du ou des sensors connectés, des grandeurs mesurées ainsi que de l'ordre dans lequel ces informations seront transmises à la centrale par chaque capteur. 
+- Association semi-automatique du terminal de mesure et de la centrale.
+- Lors de l'association du terminal de mesure et de la centrale le terminal informe automatiquement la centrale du ou des capteurs connectés, des grandeurs mesurées ainsi que de l'ordre dans lequel ces informations seront transmises à la centrale par chaque terminal. 
+- Identification du terminal par son adresse MAC
+- Identification d'une mesure par l'adresse MAC du terminale de mesure ainsi que par le type de capteur utilisé.
 
 ## Schéma de principe
 https://github.com/JOM52/esp32-airsens-v3/blob/main/schema/airsens_v3_0%20schema%20de%20principe.odg
 
-## Elément capteur:
+## Terminal de mesure:
 
 La version V1.0 proto du hardware fonctionne bien. Dans cette nouvelle version, le hardware est complétée avec un bouton et une led pour démarrer et contrôler le processus d'association du capteur avec la centrale. 
 
-Pour réduire la consommation d'énergie, cette version hard ne contient que l'essentiel pour faire fonctionner le capteur. La configuration se fait, depuis le PC,  par une interface FTDI (USB to UART) qui se branche au besoin et, les batteries se rechargent à part.
+Pour réduire la consommation d'énergie, cette version hard ne contient que l'essentiel pour faire fonctionner le terminal. La configuration se fait, depuis le PC,  par une interface FTDI (USB to UART) qui se branche au besoin et, les batteries se rechargent à part.
 
 https://github.com/JOM52/esp32-airsens-v3/blob/main/schema/airsens_v3_0.kicad_sch
 
 ### Hardware
 
-Le hardware ESP32 est un microcontrôleur qui intègre des fonctionnalités de Wi-Fi et de Bluetooth, ainsi que des modules de gestion de l'alimentation, des filtres et des amplificateurs. Il peut se connecter à différents types de capteurs I2C, le protocole de communication série synchrone ESP-now. 
+Le hardware ESP32 est un microcontrôleur qui intègre des fonctionnalités de Wi-Fi et de Bluetooth, ainsi que des modules de gestion de l'alimentation, des filtres et des amplificateurs. Il peut se connecter à différents types de capteurs I2C, et transmets ces données vers la centrale par  le protocole de communication série synchrone ESP-now. 
 
-#### Evolutions:
+##### Evolution airsens V3s:
 
 - Ajout d'une cellule photovoltaïque pour la recharge en continu de la batterie du capteur.
 
@@ -34,11 +42,11 @@ Ce projet implémente les drivers pour les capteurs de type BME280, BME680 et HD
 
 #### Fichier de configuration du capteur
 
-Le fichier de configuration permet de personnaliser le fonctionnement d'un capteur sans avoir à modifier le code source. Il contient des lignes de code en Micropython qui assignent des valeurs à des variables globales. Ces variables sont ensuite utilisées par le programme principal pour paramétrer les différents éléments du système. Le fichier de configuration n'a pas besoin d'une structure particulière, mais il peut être organisé en sections pour faciliter la lecture et la compréhension.
+Le fichier de configuration permet de personnaliser le fonctionnement d'un capteur sans avoir à modifier le code source. Il contient du code Micropython qui assigne des valeurs à des variables globales. Ces variables sont ensuite utilisées par le programme principal pour paramétrer les différents éléments du système. Le fichier de configuration n'a pas besoin d'une structure particulière, mais il peut être organisé en sections pour faciliter la lecture et la compréhension.
 
 Le code ci-après permet de configurer un capteur connecté à un ESP32. Le capteur peut être de type hdc1080, bme280 ou bme680 et mesure la température, l'humidité, la pression, le gaz et l'altitude selon le cas. 
 
-Le capteur est alimenté par une batterie Li-Ion de 3.7V (3.2V - 4.2V) - type 6850. Pour économiser l'énergie consommée, le capteur est placé en ***deepsleep*** entre chaque mesure. Le temps de sommeil est défini dans le fichier de configuration. Lors d'un éveil, le capteur lit le fichier de configuration, initialise les constantes, charge les librairies nécessaire, initialise le capteur, fait la mesure, mesure l'état de la batterie, transmets les valeurs à la centrale puis se met en ***deepsleep***
+Le terminal de mesure est alimenté par une batterie Li-Ion de 3.7V (3.2V - 4.2V) - type 6850. Pour économiser l'énergie consommée, le terminal est placé en ***deepsleep*** entre chaque mesure. Le temps de sommeil est défini dans le fichier de configuration. Lors d'un éveil, le processeur lit le fichier de configuration, initialise les constantes, charge les librairies nécessaire, initialise le capteur, fait la mesure, mesure l'état de la batterie, transmets les valeurs à la centrale puis se met en ***deepsleep***
 
 La tension de la batterie est mesurée par un pont diviseur de tension. 
 
