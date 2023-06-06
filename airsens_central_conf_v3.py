@@ -30,7 +30,7 @@ REFRESH_SCREEN_TIMER_MS = 20000 # mode auto: display next location each ... mill
 
 # WIFI
 WIFI_WAN = 'jmb-airsens'
-WIFI_PW = 'lu-mba01'
+WIFI_PW = '54f-614-c3b'
 
 # BATTERY
 BAT_MAX = 4.2 # 100%

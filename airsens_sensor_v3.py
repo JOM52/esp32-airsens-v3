@@ -29,7 +29,7 @@ v2.0.1 : 21.04.2023 --> Small cosmetic changes
 v2.0.2 : 22.04.2023 --> improved espnow message sending by fixing the wifi channel
 v2.0.3 : 26.04.2023 --> Added TO_PRINT in conf file 
 ----------------------------------------------------------------------
-v3.0.0 : 30.05.2023 --> Begin with version3 of hard ans soft. News are:
+v3.0.0 : 30.05.2023 --> Begin with version3 of hard and soft. News are:
                         - Semi-automatic pairing between capteur and centrale
                         - During the pairing the sensor automatically informs the central of:
                                 - the connected sensor(s),
@@ -62,6 +62,10 @@ from espnow import  ESPNow
 pot = ADC(Pin(conf.ADC1_PIN))            
 pot.atten(ADC.ATTN_6DB ) # Umax = 2V
 pot.width(ADC.WIDTH_12BIT) # 0 ... 4095
+sol = ADC(Pin(conf.SOL_PIN))            
+sol.atten(ADC.ATTN_6DB ) # Umax = 2V
+sol.width(ADC.WIDTH_12BIT) # 0 ... 4095
+
 
 LED = Pin(conf.LED_PIN, Pin.OUT)
 BTN_PAIR = Pin(conf.BUTTON_PAIR_PIN, mode = Pin.IN, pull=Pin.PULL_UP)
@@ -125,11 +129,10 @@ def main():
                         value += float(sensor.gas)
                     elif measurement == 'alt':
                         value += float(sensor.altitude)
-#                 value = str(value / conf.AVERAGING_BME)
                 msg += measurement + ':' + str(value / conf.AVERAGING_BME) + ';'
 
             # read the battery voltage
-            bat = 0
+            bat = 0	
             for l in range(conf.AVERAGING_BAT):
                 bat += pot.read()
             bat = bat / conf.AVERAGING_BAT * (2 / 4095) / conf.DIV
@@ -148,10 +151,12 @@ def main():
         espnow.active(True)
         espnow.add_peer(bin_mac_adress) #conf.PROXY_MAC_ADRESS)
 #         print('espnow.get_peer(bin_mac_adress):',espnow.get_peer(bin_mac_adress))
+#         sol_v = str(sol.read() * (2 / 4095) / conf.DIV)
+        sol_v = '{:.2f}'.format(sol.read() * (2 / 4095) / conf.DIV)
         # send the message
         if conf.TO_PRINT: print()
         for msg in measurements:
-            if conf.TO_PRINT: print(msg)
+            if conf.TO_PRINT: print(msg + ' sol:' + sol_v + 'V')
             msg_received_by_central = espnow.send(bin_mac_adress, msg, True)
             if not msg_received_by_central:
                 log.counters('missed', True)
@@ -183,9 +188,6 @@ def main():
                 if conf.TO_PRINT: print('going to endless deepsleep in ' + str(pass_to_wait - i) + ' s')
                 sleep_ms(1000)
             log.log_error('Endless deepsleep due to low battery Ubat=' + str(bat) , to_print = True)
-
-            #level parameter can be: esp32.WAKEUP_ANY_HIGH or esp32.WAKEUP_ALL_LOW
-#             esp32.wake_on_ext0(pin = wake1, level = esp32.WAKEUP_ALL_LOW)
             deepsleep()
         
     except Exception as err:

@@ -21,12 +21,18 @@ v2.0.0 : 10.04.2023 --> new data structure no more compatible with old versions
 v2.0.1 : 21.04.2023 --> small cosmetic changes
 v2.0.2 : 21.04.2023 --> added menu ABOUT and modified WLAN MAC adresse format
 v2.0.3 : 26.04.2023 --> small cosmetics changes
+-----------------------------------------------------------------------
+v3.0.0 : 30.05.2023 --> Begin with version3 of hard and soft. News are:
+                        - Semi-automatic pairing between capteur and centrale
+                        - During the pairing the sensor automatically informs the central of:
+                                - the connected sensor(s),
+                                - the measured quantities.
 """
-VERSION = '2.0.3'
-PROGRAM_NAME = 'airsens_central_v2.py'
+VERSION = '3.0.0'
+PROGRAM_NAME = 'airsens_central_v3.py'
 PROGRAM_NAME_SHORT = 'airsens'
 print('Loading "' + PROGRAM_NAME + '" v' + VERSION + ' please be patient ...')
-import airsens_central_conf_v2 as conf
+import airsens_central_conf_v3 as conf
 
 from ubinascii import hexlify, unhexlify
 from machine import Pin, Timer, reset
@@ -395,7 +401,7 @@ class Central:
                         
                         # prepare the list of éléments for adding a new measurement
                         new_measurement_list = [
-                            sensor_type,
+                            location,
                             mes_dict['temp'][2].format(mes_dict['temp'][0]),
                             mes_dict['hum'][2].format(mes_dict['hum'][0]),
                             mes_dict['pres'][2].format(mes_dict['pres'][0]),
@@ -459,7 +465,8 @@ class Central:
                         else:
                             self.log.log_error('wrong message received', to_print = True)
                     else:
-                        print('---------------------------------------------------------------------------------------------------------------------')
+                        pass
+#                         print('---------------------------------------------------------------------------------------------------------------------')
 
         except Exception as err:
             self.log.log_error('Main', self.log.error_detail(err), to_print = True)

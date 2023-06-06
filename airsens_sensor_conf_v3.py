@@ -1,9 +1,9 @@
 # acquisitions
 SENSOR_LOCATION = 'solar_v3b' 
-T_DEEPSLEEP_MS = 10000
+T_DEEPSLEEP_MS = 300000
 # sensor
 SENSORS = {
-    'hdc1080':['temp', 'hum'],
+#     'hdc1080':['temp', 'hum'],
     'bme280':['temp', 'hum', 'pres'],
 #     'bme680':['temp', 'hum', 'pres', 'gas', 'alt'],
   }
@@ -20,6 +20,7 @@ R1 = 977000 # first divider bridge resistor
 R2 = 312000 # second divider bridge resistor
 DIV = R2 / (R1 + R2)  
 ADC1_PIN = 35 # Measure of analog voltage (ex: battery voltage following)
+SOL_PIN = 34 # measure of the solar panel voltage
 #averaging of measurements
 AVERAGING = 1
 AVERAGING_BAT = 1
