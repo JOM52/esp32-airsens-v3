@@ -27,6 +27,7 @@ v0.2.0 : 07.09.2022 --> log_error modified for display line error number ---> no
 -----------------------------------------------------------------------------------------
 v0.3.0 : 12.03.2023 --> ajout de la date et heure de la survenance d'une erreur
 v0.3.1 : 15.03.2023 --> amélioration des procédures log_error et error_detail
+v3.3.2 : 07.06.2023 --> correction in log_error gor OSError 
 """
 from sys import print_exception 
 from io import StringIO
@@ -88,7 +89,10 @@ class LogAndCount:
     def log_error(self, info, err_info='', to_print = False):
         
         if err_info is not None:
-            err_info = err_info.replace(':','')
+            try:
+                err_info = err_info.replace(':','')
+            except:
+                pass
             info = self.get_formated_time() + ' ' + info
         msg = info + ', ' + err_info if err_info else info
         
