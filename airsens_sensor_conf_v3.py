@@ -1,12 +1,8 @@
 # acquisitions
 SENSOR_LOCATION = 'solar_v3b' 
-T_DEEPSLEEP_MS = 300000
+T_DEEPSLEEP_MS = 30000
 # sensor
-SENSORS = {
-#     'hdc1080':['temp', 'hum'],
-    'bme280':['temp', 'hum', 'pres'],
-#     'bme680':['temp', 'hum', 'pres', 'gas', 'alt'],
-  }
+SENSORS = {'bme280':['temp', 'hum', 'pres'], 'hdc1080':['temp', 'hum'], }
 # power supply
 TO_PRINT = True
 ON_BATTERY = True

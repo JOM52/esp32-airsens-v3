@@ -35,16 +35,17 @@ v3.0.0 : 30.05.2023 --> Begin with version3 of hard and soft. News are:
                                 - the connected sensor(s),
                                 - the measured quantities.
 v3.0.1 : 30.05.2023 --> implémentation logiciel de la led et du bouton pour le pairage (éléments de base)
+v3.0.2 : 06.06.2023 --> implémentation lecture tension cellule photovoltaique
 """
 
 from utime import ticks_ms, sleep_ms
 start_time = ticks_ms()
 # PARAMETERS ========================================
 PRG_NAME = 'airsens_sensor_v3'
-PRG_VERSION = '3.0.0'
+PRG_VERSION = '3.0.2'
 from ubinascii import hexlify, unhexlify
 import airsens_sensor_conf_v3 as conf  # configuration file
-from machine import Pin, freq, TouchPad, reset_cause
+from machine import Pin, freq, TouchPad, reset, reset_cause
 from machine import ADC, SoftI2C, deepsleep, Timer, DEEPSLEEP_RESET, EXT0_WAKE, HARD_RESET
 from sys import exit
 from lib.log_and_count import LogAndCount
@@ -70,6 +71,9 @@ sol.width(ADC.WIDTH_12BIT) # 0 ... 4095
 LED = Pin(conf.LED_PIN, Pin.OUT)
 BTN_PAIR = Pin(conf.BUTTON_PAIR_PIN, mode = Pin.IN, pull=Pin.PULL_UP)
 PAIR_STATUS = not BTN_PAIR.value()
+        
+# instanciation of I2C
+i2c = SoftI2C(scl=Pin(conf.BME_SCL_PIN), sda=Pin(conf.BME_SDA_PIN), freq=10000)
 
 def blink_led(freq='high', n_repeat=3):
     if freq =='high': t_ms = 100
@@ -85,11 +89,13 @@ def main():
     
     if PAIR_STATUS:
         blink_led('high', 7)
-        sleep_ms(500)        
-        blink_led('med', 5)
-        sleep_ms(500)        
-        blink_led('low', 3)
-        sleep_ms(500)        
+        print('detection of connected sensors and updated configuration file')
+        import airsens_select_sensor
+        sel_sens = airsens_select_sensor.SelectSensor(i2c)
+        sel_sens.main()
+        print('reset the machine with the new parameters')
+        reset()
+        
     try:
         bin_mac_adress = unhexlify(conf.PROXY_MAC_ADRESS.replace(':',''))
         if conf.TO_PRINT:
@@ -99,13 +105,10 @@ def main():
             print('WIFI channel:', conf.WIFI_CHANNEL)
 #         print('Central WLAN:', conf.WIFI_WAN)
         i = log.counters('passe', True)
-        
-        # instanciation of I2C
-        i2c = SoftI2C(scl=Pin(conf.BME_SCL_PIN), sda=Pin(conf.BME_SDA_PIN), freq=10000)
 
         # instanciation of sensor
         measurements = []
-        for sensor_actif in conf.SENSORS:
+        for i, sensor_actif in enumerate(conf.SENSORS):
             if sensor_actif == 'bme280':
                 sensor = bme280.BME280(i2c=i2c)
             elif sensor_actif == 'bme680':
@@ -113,7 +116,8 @@ def main():
             elif sensor_actif == 'hdc1080':
                 sensor = hdc1080.HDC1080(i2c=i2c)
             
-            sensor_cpl = '' #'_' + sensor_actif[0] + sensor_actif[3]
+            sensor_cpl = str(i)
+            print(conf.SENSOR_LOCATION + sensor_cpl)
             msg = 'jmb,'  + conf.SENSOR_LOCATION + sensor_cpl + ',' + sensor_actif +',' 
             measurement_list = conf.SENSORS.get(sensor_actif)
             for measurement in measurement_list:
