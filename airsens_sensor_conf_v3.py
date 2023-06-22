@@ -1,8 +1,11 @@
+# ESP-now
+HOST_MAC_ADRESS="3C:61:05:0D:67:CC"
+WIFI_CHANNEL = 11
 # acquisitions
-SENSOR_LOCATION = 'solar_v3b' 
+SENSOR_LOCATION = 'E8:D4' 
 T_DEEPSLEEP_MS = 30000
 # sensor
-SENSORS = {'bme280':['temp', 'hum', 'pres'], 'hdc1080':['temp', 'hum'], }
+SENSORS = {'bme280':['temp', 'hum', 'pres'], }
 # power supply
 TO_PRINT = True
 ON_BATTERY = True
@@ -21,11 +24,10 @@ SOL_PIN = 34 # measure of the solar panel voltage
 AVERAGING = 1
 AVERAGING_BAT = 1
 AVERAGING_BME = 1
-# ESP-now
-PROXY_MAC_ADRESS = '3C:61:05:0D:67:CC'
-WIFI_CHANNEL = 1
 # PAIR
 LED_PIN = 12
 BUTTON_PAIR_PIN = 14 # no du port gpio
+# SOLAR
+SOLAR = False
 
 
