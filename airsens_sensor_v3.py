@@ -94,7 +94,7 @@ def main():
     
     if PAIR_STATUS:
         blink_led('high', 7)
-        import airsens_scan
+        import lib.airsens_scan as airsens_scan
 
         scan = airsens_scan.AirSensScan(i2c, CONF_FILE_NAME)
         scan.main()
