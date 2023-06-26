@@ -12,6 +12,7 @@ github: https://github.com/jom52/esp32-airsens-v3
 - scan and record connected sensors
 - scan and record espnow hosts and record the one with the best rssi
 v0.1.0 : 14.06.2023 --> first prototype
+v0.1.1 : 23.06.2023 --> modif en cours pour transmission des grandeurs mesurées
 """
 import airsens_sensor_conf_v3 as conf  # configuration file
 from machine import SoftI2C, Pin
@@ -27,9 +28,9 @@ class AirSensScan:
     
     def __init__(self, i2c, conf_file_name):
         self.POSSIBLES_SENSORS = {
-            'hdc1080':['temp', 'hum'],
-            'bme280':['temp', 'hum', 'pres'],
-            'bme680':['temp', 'hum', 'pres', 'gas', 'alt'],
+            'hdc1080':['temp', 'hum', 'bat'],
+            'bme280':['temp', 'hum', 'pres', 'bat'],
+            'bme680':['temp', 'hum', 'pres', 'gas', 'alt', 'bat'],
           }
         self.i2c = i2c
         self.conf_file_name = conf_file_name
@@ -52,7 +53,7 @@ class AirSensScan:
         espnow.add_peer(bin_mac_adress) #conf.PROXY_MAC_ADRESS)
         if espnow.send(bin_mac_adress, 'PAIRING', True):
             while True:
-                host, msg = espnow.irecv(timeout=5000)     # Available on ESP32 and ESP8266
+                host, msg = espnow.irecv(timeout_ms=5000)     # Available on ESP32 and ESP8266
                 if msg: # msg == None if timeout in irecv()
                     decode_msg = msg.decode().split('/')
                     host = decode_msg[0]
@@ -74,8 +75,11 @@ class AirSensScan:
     
     def verify_witch_sensor_is_connected(self, i2c):
         connected_sensors = []
+#         print('self.POSSIBLES_SENSORS:', self.POSSIBLES_SENSORS)
         for sensor_tested in self.POSSIBLES_SENSORS:
             if sensor_tested == 'bme280':
+#                 print('sensor_tested:', sensor_tested)
+#                 print('sensor grandeurs:', self.POSSIBLES_SENSORS[sensor_tested])
                 try:
                     sensor = bme280.BME280(i2c=i2c)
                     connected_sensors.append(sensor_tested)
@@ -93,9 +97,13 @@ class AirSensScan:
                     connected_sensors.append(sensor_tested)
                 except:
                     pass
-        return connected_sensors
+# tbd
+# retourner une entrée de dictionnaire avec sensoor et quantity
+#
+        return connected_sensors, self.POSSIBLES_SENSORS[sensor_tested]
     
-    def write_actives_sensors_in_conf(self, sensor_list):
+    def write_actives_sensors_in_conf(self, sensor_list, sensor_quantity):
+        print('sensor, quantity:', sensor_list, sensor_quantity)
         with open (self.conf_file_name, 'r') as f:
             lines = f.readlines()
         with open (self.conf_file_name, 'w') as f:
@@ -123,9 +131,9 @@ class AirSensScan:
                     f.write(line)
     
     def main(self):
-        connected_sensors = self.verify_witch_sensor_is_connected(self.i2c)
-        print('sensors detected:', connected_sensors)
-        self.write_actives_sensors_in_conf(connected_sensors)
+        connected_sensors, sensor_quantity = self.verify_witch_sensor_is_connected(self.i2c)
+        print('sensors detected:', connected_sensors, 'quantity:', sensor_quantity)
+        self.write_actives_sensors_in_conf(connected_sensors, sensor_quantity)
         
         best_host = self.scan_espnow_servers()
         print('best host:', best_host)

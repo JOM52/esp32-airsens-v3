@@ -37,49 +37,55 @@ v3.0.0 : 30.05.2023 --> Begin with version3 of hard and soft. News are:
 v3.0.1 : 30.05.2023 --> implémentation logiciel de la led et du bouton pour le pairage (éléments de base)
 v3.0.2 : 06.06.2023 --> implémentation lecture tension cellule photovoltaique
 v3.0.3 : 18.06.2023 --> MTL essai sur wifi mtl
+----------------------------------------------------------------------
+v3.1.0 : 23.06.2023 --> new datmessage structure no more compatible with old versions.
+v3.1.1 : 23.06.2023 --> correction on count of messages lost
+v3.1.2 : 25.06.2023 --> standardised the integration of bat and sol in message
+v3.1.3 : 25.06.2023 --> final print improved
 """
 
 from utime import ticks_ms, sleep_ms
 start_time = ticks_ms()
+
 # PARAMETERS ========================================
 PRG_NAME = 'airsens_sensor_v3_scan'
-PRG_VERSION = '3.0.3'
+PRG_VERSION = '3.1.3'
 CONF_FILE_NAME = 'airsens_sensor_conf_v3.py'
 import airsens_sensor_conf_v3 as conf  # configuration file
-
+# IMPORTATIONS ======================================
 from ubinascii import hexlify, unhexlify
 from machine import Pin, freq, TouchPad, reset, reset_cause
 from machine import ADC, SoftI2C, deepsleep, Timer, DEEPSLEEP_RESET, EXT0_WAKE, HARD_RESET
 from machine import unique_id
 from sys import exit
+from network import WLAN, STA_IF, AP_IF
+from espnow import  ESPNow
 from lib.log_and_count import LogAndCount
-import esp32
 log = LogAndCount()
+
+# SENSORS ============================================
 if 'bme280' in conf.SENSORS:
     import lib.bme280 as bme280
 if 'bme680' in conf.SENSORS:
     import lib.bme680 as bme680
 if 'hdc1080' in conf.SENSORS:
     import lib.hdc1080 as hdc1080
-from network import WLAN, STA_IF, AP_IF
-from espnow import  ESPNow
-
-pot = ADC(Pin(conf.ADC1_PIN))            
-pot.atten(ADC.ATTN_6DB ) # Umax = 2V
-pot.width(ADC.WIDTH_12BIT) # 0 ... 4095
-if conf.SOLAR:
-    sol = ADC(Pin(conf.SOL_PIN))            
-    sol.atten(ADC.ATTN_6DB ) # Umax = 2V
-    sol.width(ADC.WIDTH_12BIT) # 0 ... 4095
-
-
+# ADC MEASUREMENTS ===================================
+if conf.ON_BATTERY:
+    bat_adc_in = ADC(Pin(conf.ADC1_PIN))            
+    bat_adc_in.atten(ADC.ATTN_6DB ) # Umax = 2V
+    bat_adc_in.width(ADC.WIDTH_12BIT) # 0 ... 4095
+if conf.SOLAR_PANEL:
+    sol_adc_in = ADC(Pin(conf.SOL_PIN))            
+    sol_adc_in.atten(ADC.ATTN_6DB ) # Umax = 2V
+    sol_adc_in.width(ADC.WIDTH_12BIT) # 0 ... 4095
+# LED AND BUTTONS =====================================
 LED = Pin(conf.LED_PIN, Pin.OUT)
 BTN_PAIR = Pin(conf.BUTTON_PAIR_PIN, mode = Pin.IN, pull=Pin.PULL_UP)
 PAIR_STATUS = not BTN_PAIR.value()
-        
-# instanciation of I2C
+# I2C ==================================================
 i2c = SoftI2C(scl=Pin(conf.BME_SCL_PIN), sda=Pin(conf.BME_SDA_PIN), freq=10000)
-
+# FUNCTIONS ===========================================
 def blink_led(freq='high', n_repeat=3):
     if freq =='high': t_ms = 100
     elif freq == 'med': t_ms = 200
@@ -89,9 +95,24 @@ def blink_led(freq='high', n_repeat=3):
         sleep_ms(t_ms)
         LED.off()
         sleep_ms(t_ms)
-    
+
+def end_print(total_time, t_deepsleep):
+    msg_send = log.counters('passe', True)
+    msg_lost = log.counters('lost', False)
+    msg_good = msg_send - msg_lost
+    if conf.TO_PRINT:
+        print('msg send:' + str(msg_send) + ' good:' + str(msg_good) + ' lost:' + str(msg_lost) +
+              ' - error:' + str(log.counters('error', False)), '-->' , str(total_time) + 'ms')
+        print('going to deepsleep for: ' + str(t_deepsleep) + ' ms')
+        print('=================================================')
+    else:
+        print(str(total_time) + 'ms')
+    deepsleep(t_deepsleep)
+
+
+
 def main():
-    
+    # Green button pressed during boot (yellow button)
     if PAIR_STATUS:
         blink_led('high', 7)
         import lib.airsens_scan as airsens_scan
@@ -99,13 +120,13 @@ def main():
         scan = airsens_scan.AirSensScan(i2c, CONF_FILE_NAME)
         scan.main()
         
-        print('reset the machine with the new parameters')
+        print('in 5s the system will reset the machine with the new parameters')
         print('-----------------------------------------------')
-        sleep_ms(1500)
+        sleep_ms(5000)
         reset()
-
+    # Normal measurement (no button pressed on boot)
     try:
-        host_mac_adress = unhexlify(conf.HOST_MAC_ADRESS.replace(':',''))
+        host_mac = unhexlify(conf.HOST_MAC_ADRESS.replace(':',''))
         sensor_mac = hexlify(unique_id(),':').decode().upper()
         if conf.TO_PRINT:
             print('=================================================')
@@ -113,20 +134,27 @@ def main():
             print('Host mac:  ', conf.HOST_MAC_ADRESS)
             print('Sensor mac:', sensor_mac)
             print('WIFI channel:', conf.WIFI_CHANNEL)
-
-        # instanciation of sensor
+        
+        # A WLAN interface must be active to send()/recv()
+        sta = WLAN(STA_IF)
+        sta.active(True)
+        sta.config(channel=conf.WIFI_CHANNEL)
+        # ESPNow
+        espnow = ESPNow()
+        espnow.active(True)
+        espnow.add_peer(host_mac, lmk=None, channel=conf.WIFI_CHANNEL, ifidx=STA_IF, encrypt=False) #conf.PROXY_MAC_ADRESS)
+        
         measurements = []
-        for i, sensor_actif in enumerate(conf.SENSORS):
-            if sensor_actif == 'bme280':
+        for i, sensor_type in enumerate(conf.SENSORS):
+            if sensor_type == 'bme280':
                 sensor = bme280.BME280(i2c=i2c)
-            elif sensor_actif == 'bme680':
+            elif sensor_type == 'bme680':
                 sensor = bme680.BME680_I2C(i2c=i2c)
-            elif sensor_actif == 'hdc1080':
+            elif sensor_type == 'hdc1080':
                 sensor = hdc1080.HDC1080(i2c=i2c)
             
-            sensor_cpl = ':' + str(i)
-            msg = 'jmb,'  + sensor_mac[-5:] + sensor_cpl + ',' + sensor_actif +',' 
-            measurement_list = conf.SENSORS.get(sensor_actif)
+            msg = 'jmb,'  + sensor_mac + ',' + conf.SENSOR_LOCATION + ',' + sensor_type + ','
+            measurement_list = conf.SENSORS.get(sensor_type)
             for measurement in measurement_list:
                 value = 0
                 for l in range(conf.AVERAGING_BME):
@@ -140,38 +168,34 @@ def main():
                         value += float(sensor.gas)
                     elif measurement == 'alt':
                         value += float(sensor.altitude)
-                msg += measurement + ':' + str(value / conf.AVERAGING_BME) + ';'
+                    msg += measurement + ':' + str(value / conf.AVERAGING_BME) + ';'
+            msg = msg[:-1]          
 
             # read the battery voltage
             bat = 0	
-            for l in range(conf.AVERAGING_BAT):
-                bat += pot.read()
-            bat = bat / conf.AVERAGING_BAT * (2 / 4095) / conf.DIV
-            msg += 'bat:' + str(bat) + ''
-            measurements.append(msg)
+            if conf.ON_BATTERY:
+                for l in range(conf.AVERAGING_BAT):
+                    bat += bat_adc_in.read()
+                bat = bat / conf.AVERAGING_BAT * (2 / 4095) / conf.DIV
+                msg += ';bat:' + str(bat) + ''
+                measurements.append(msg)
+
+            # read the solar panel voltage
+            sol = 0	
+            if conf.SOLAR_PANEL:
+                for l in range(conf.AVERAGING_BAT):
+                    sol += sol_adc_in.read()
+                sol = sol / conf.AVERAGING_BAT * (2 / 4095) / conf.DIV
+                msg += ';sol:' + str(sol) + ''
+                measurements.append(msg)
     
-        # A WLAN interface must be active to send()/recv()
-        sta = WLAN(STA_IF)
-        sta.active(True)
-        sta.config(channel=conf.WIFI_CHANNEL)
-        # instantiation of ESPNow
-        espnow = ESPNow()
-        espnow.active(True)
-        espnow.add_peer(host_mac_adress, lmk=None, channel=conf.WIFI_CHANNEL, ifidx=STA_IF, encrypt=False) #conf.PROXY_MAC_ADRESS)
-        if conf.SOLAR:
-            sol_v = '{:.2f}'.format(sol.read() * (2 / 4095) / conf.DIV)
-        # send the message
-        if conf.TO_PRINT: print()
-        for msg in measurements:
-            if conf.SOLAR:
-                if conf.TO_PRINT: print(msg + ' sol:' + sol_v + 'V')
-            else:
-                if conf.TO_PRINT: print(msg)
+            if conf.TO_PRINT: print(msg)
+            
             # send message to host
-            msg_received_by_host = espnow.send(host_mac_adress, msg, True)
+            msg_received_by_host = espnow.send(host_mac, msg, True)
             if not msg_received_by_host:
                 log.counters('lost', True)
-        if conf.TO_PRINT: print()
+                
         # close the communication canal
         espnow.active(False)
         espnow = None
@@ -181,27 +205,21 @@ def main():
         total_time = ticks_ms() - start_time
         t_deepsleep = max(conf.T_DEEPSLEEP_MS - total_time, 10)
         # check the level of the battery
-        if float(bat) > conf.UBAT_0 or not conf.ON_BATTERY:
-            # battery is ok so finishing tasks
-            msg_send = log.counters('passe', True)
-            msg_lost = log.counters('lost', False)
-            msg_good = msg_send - msg_lost
-            if conf.TO_PRINT:
-                print('msg send:' + str(msg_send) + ' good:' + str(msg_good) + ' lost:' + str(msg_lost) + ' - error:' + str(log.counters('error', False)), '-->' , str(total_time) + 'ms')
-                print('going to deepsleep for: ' + str(t_deepsleep) + ' ms')
-                print('=================================================')
-
-            else:
-                print(str(total_time) + 'ms')
-            deepsleep(t_deepsleep)
+        if not conf.ON_BATTERY:
+            # not on battery so finish the measure
+            end_print(total_time, t_deepsleep)
         else:
-            # battery is dead so endless sleep to protect the battery
-            pass_to_wait = 10
-            for i in range(pass_to_wait):
-                if conf.TO_PRINT: print('going to endless deepsleep in ' + str(pass_to_wait - i) + ' s')
-                sleep_ms(1000)
-            log.log_error('Endless deepsleep due to low battery Ubat=' + str(bat) , to_print = True)
-            deepsleep()
+            if float(bat) > conf.UBAT_0:
+                # battery is ok so finishing tasks
+                end_print(total_time, t_deepsleep)
+            else:
+                # battery is dead so endless sleep to protect the battery
+                pass_to_wait = 10
+                for i in range(pass_to_wait):
+                    if conf.TO_PRINT: print('going to endless deepsleep in ' + str(pass_to_wait - i) + ' s')
+                    sleep_ms(1000)
+                log.log_error('Endless deepsleep due to low battery Ubat=' + str(bat) , to_print = True)
+                deepsleep()
         
     except Exception as err:
         log.counters('error', True)

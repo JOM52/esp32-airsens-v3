@@ -4,23 +4,23 @@ Version 3
 
 Dénomination des éléments:
 
-- Capteur: composant qui permet la mesures d'une ou plusieurs grandeurs physiques;
-- Terminal de mesure: microcontrôleur qui contrôle un ou plusieurs capteurs et se charge de transmettre les données vers une centrale;
-- Centrale: microcontrôleur qui reçoit les données d'un ou plusieurs terminaux de mesure et qui les transmets vers un serveur domotique de type MQTT
+- **Capteur (Sensor)**: composant qui permet la mesures d'une ou plusieurs grandeurs physiques;
+- **Module de capteur ( Sensor module)**: microcontrôleur qui contrôle un ou plusieurs capteurs et se charge de transmettre les données vers une centrale;
+- **Centrale (Host)**: microcontrôleur qui reçoit les données d'un ou plusieurs terminaux de mesure et qui les transmets vers un serveur domotique de type MQTT
 
-**esp32-airsens** est un projet de domotique qui consiste à créer des terminaux de mesure intelligents et connectés pour surveiller l'environnement. Ils sont basés sur le processeur ESP32 et le langage Micropython. Ils peuvent mesurer différents paramètres tels que la température, l'humidité, la pression atmosphérique et le niveau de charge de batterie. Ils envoient ensuite ces données à une centrale via un réseau sans fil. La centrale est un système Liligo-TTGO qui reçoit les données des terminaux de mesure, les publie sur un broker MQTT et les affiche sur un écran. L'écran permet de visualiser les informations pertinentes pour chaque terminal de mesure.
+**esp32-airsens** est un projet de domotique qui vise à créer des petits appareils intelligents et connectés pour contrôler l'environnement. Ils utilisent le processeur ESP32 et le langage Micropython. Ils peuvent détecter différents paramètres comme la température, l'humidité, la pression de l'air et le niveau de batterie. Ils transmettent ensuite ces données à une station centrale via un réseau sans fil. La station centrale est un système Liligo-TTGO qui reçoit les données des appareils, les publie sur un broker MQTT et les montre sur un écran. L'écran permet de visualiser les informations pertinentes pour chaque Module de capteur.
 
 La version 3 du projet est basée sur la version 2 et introduit les éléments suivants:
 
-- Association semi-automatique du terminal de mesure et de la centrale.
-- Lors de l'association du terminal de mesure et de la centrale le terminal informe automatiquement la centrale du ou des capteurs connectés, des grandeurs mesurées ainsi que de l'ordre dans lequel ces informations seront transmises à la centrale par chaque terminal. 
+- Association semi-automatique du Module de capteur et de la centrale.
+- Lors de l'association du Module de capteur et de la centrale le terminal informe automatiquement la centrale du ou des capteurs connectés, des grandeurs mesurées ainsi que de l'ordre dans lequel ces informations seront transmises à la centrale par chaque terminal. 
 - Identification du terminal par son adresse MAC
 - Identification d'une mesure par l'adresse MAC du terminale de mesure ainsi que par le type de capteur utilisé.
 
 ## Schéma de principe
 https://github.com/JOM52/esp32-airsens-v3/blob/main/schema/airsens_v3_0%20schema%20de%20principe.odg
 
-## Terminal de mesure:
+## Module de capteur:
 
 La version V1.0 proto du hardware fonctionne bien. Dans cette nouvelle version, le hardware est complétée avec un bouton et une led pour démarrer et contrôler le processus d'association du capteur avec la centrale. 
 
@@ -31,6 +31,19 @@ https://github.com/JOM52/esp32-airsens-v3/blob/main/schema/airsens_v3_0.kicad_sc
 ### Hardware
 
 Le hardware ESP32 est un microcontrôleur qui intègre des fonctionnalités de Wi-Fi et de Bluetooth, ainsi que des modules de gestion de l'alimentation, des filtres et des amplificateurs. Il peut se connecter à différents types de capteurs I2C, et transmets ces données vers la centrale par  le protocole de communication série synchrone ESP-now. 
+
+##### firmware esp32/espnow
+
+la version du firmware est trouvée sur le site: 
+**[GitHub - glenn20/micropython-espnow-images: A collection of pre-compiled micropython images (including espnow support) for the esp32 and esp8266.](https://github.com/glenn20/micropython-espnow-images)** 
+dans le répertoire:
+**20220709_espnow-g20-v1.19.1-espnow-6-g44f65965b**
+et le fichier est:
+**firmware-esp32-GENERIC.bin**
+
+Ce firmware convient pour les processeurs ESP32-WROOM-32 et Liligo TTGO t-display
+
+**Attention:** la version v1.20.0 est sortie mais pose des problèmes au niveau de la communication espnow. De nombreux messages sont perdus. Donc on reste sur la version v1.19.1
 
 ##### Evolution airsens V3s:
 
@@ -46,7 +59,7 @@ Le fichier de configuration permet de personnaliser le fonctionnement d'un capte
 
 Le code ci-après permet de configurer un capteur connecté à un ESP32. Le capteur peut être de type hdc1080, bme280 ou bme680 et mesure la température, l'humidité, la pression, le gaz et l'altitude selon le cas. 
 
-Le terminal de mesure est alimenté par une batterie Li-Ion de 3.7V (3.2V - 4.2V) - type 6850. Pour économiser l'énergie consommée, le terminal est placé en ***deepsleep*** entre chaque mesure. Le temps de sommeil est défini dans le fichier de configuration. Lors d'un éveil, le processeur lit le fichier de configuration, initialise les constantes, charge les librairies nécessaire, initialise le capteur, fait la mesure, mesure l'état de la batterie, transmets les valeurs à la centrale puis se met en ***deepsleep***
+Le Module de capteur est alimenté par une batterie Li-Ion de 3.7V (3.2V - 4.2V) - type 6850. Pour économiser l'énergie consommée, le terminal est placé en ***deepsleep*** entre chaque mesure. Le temps de sommeil est défini dans le fichier de configuration. Lors d'un éveil, le processeur lit le fichier de configuration, initialise les constantes, charge les librairies nécessaire, initialise le capteur, fait la mesure, mesure l'état de la batterie, transmets les valeurs à la centrale puis se met en ***deepsleep***
 
 La tension de la batterie est mesurée par un pont diviseur de tension. 
 

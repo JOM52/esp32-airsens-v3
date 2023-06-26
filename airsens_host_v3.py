@@ -29,8 +29,10 @@ v3.0.0 : 30.05.2023 --> Begin with version3 of hard and soft. News are:
                                 - the measured quantities.
 v3.0.1 : 10.06.2023 --> automatic pairing in developpement
 v3.0.2 : 21.06.2023 --> renamed the program to airsens_host_v3.py
+-----------------------------------------------------------------------
+v3.1.0 : 23.06.2023 --> new datmessage structure no more compatible with old versions. 
 """
-VERSION = '3.0.2'
+VERSION = '3.1.0'
 PROGRAM_NAME = 'airsens_host_v3.py'
 PROGRAM_NAME_SHORT = 'airsens'
 print('Loading "' + PROGRAM_NAME + '" v' + VERSION + ' this may take a while, please be patient ...')
@@ -390,7 +392,8 @@ class Host:
                         try:
                             if len(msg.decode('utf-8').strip()) > 0:
                                 '''New message received'''
-                                jmb_id, location, sensor_type, rx_measurements = msg.decode('utf-8').split(',')
+#                                 jmb_id, location, sensor_type, rx_measurements = msg.decode('utf-8').split(',')
+                                jmb_validation, sensor_id, sensor_location, sensor_type, rx_measurements = msg.decode('utf-8').split(',')
                                 rx_measurements = rx_measurements.split(';')
                                 # format the numbers for the small display
                                 mes_list = []
@@ -434,7 +437,8 @@ class Host:
                                 
                                 # prepare the list of éléments for adding a new measurement
                                 new_measurement_list = [
-                                    location,
+#                                     sensor_location,
+                                    sensor_id[-10:],
                                     mes_dict['temp'][2].format(mes_dict['temp'][0]),
                                     mes_dict['hum'][2].format(mes_dict['hum'][0]),
                                     mes_dict['pres'][2].format(mes_dict['pres'][0]),
@@ -470,11 +474,11 @@ class Host:
 #                                     sta.config(ps_mode=WIFI_PS_NONE)  # ..then disable power saving
 
                                 # has the message the right identificator
-                                if jmb_id == 'jmb':
+                                if jmb_validation == 'jmb':
                                     passe = self.log.counters('passe', True)
                                     try:
                                         # create the list of data  to send
-                                        txt_mes = [conf.TOPIC, location]
+                                        txt_mes = [conf.TOPIC, sensor_location]
                                         # append the values in the list
                                         mes = []
                                         for act_mes in mes_list:
@@ -498,7 +502,7 @@ class Host:
                                         self.log.log_error('MQTT publish', self.log.error_detail(err), to_print = True)
                                         self.reset_esp32()
                                     # init the list of data to print
-                                    txt_mes = [str(passe), self.get_formated_time(), conf.TOPIC, location, sensor_type]
+                                    txt_mes = [str(passe), self.get_formated_time(), conf.TOPIC, sensor_id, sensor_location, sensor_type]
                                     # add the values with the format
                                     mes1 = []
                                     for act_mes in mes_list:
