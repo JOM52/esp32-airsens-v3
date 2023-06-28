@@ -13,73 +13,128 @@ github: https://github.com/jom52/esp32-airsens-v3
 - scan and record espnow hosts and record the one with the best rssi
 v0.1.0 : 14.06.2023 --> first prototype
 v0.1.1 : 23.06.2023 --> modif en cours pour transmission des grandeurs mesurées
+v0.1.2 : 26.06.2023 --> ajout de la sélection du meilleur canal sur le wifi
+v0.1.3 : 27.06.2023 --> improved version
+v0.1.4 : 27.06.2023 --> nettoyage du code
 """
 import airsens_sensor_conf_v3 as conf  # configuration file
 from machine import SoftI2C, Pin
 from network import WLAN, STA_IF, AP_IF
 from espnow import  ESPNow
-from ubinascii import hexlify, unhexlify
+from ubinascii import unhexlify
 
 import lib.bme280 as bme280
 import lib.bme680 as bme680
 import lib.hdc1080 as hdc1080
+"""
+Ce programme fait partie de l'ensemble airsens.
+
+Il permet de découvrir quels sont les capteurs connectés et de les ajouter au fichier
+airsens_sensor_conf.py
+
+Il scanne aussi les hosts airsens disponible sur tous les canaux wifi (1..14) et
+enregistre dans le fichier de configuration l'adresse mac et le canal de celui qui
+a le meilleur rssi 
+
+paramètres en entrée:
+    - I2C connecté
+    - nom du fichier de configuration du capteur
+    
+en sortie:
+    - True si un ou des capteurs ET un ou des hosts on été trouvés
+    - False dans le cas contraire
+"""
+class GlobalVar:
+    sensor_ok = False
+    host_ok = False
 
 class AirSensScan:
     
     def __init__(self, i2c, conf_file_name):
+        # paramètres des sensors
         self.POSSIBLES_SENSORS = {
-            'hdc1080':['temp', 'hum', 'bat'],
-            'bme280':['temp', 'hum', 'pres', 'bat'],
-            'bme680':['temp', 'hum', 'pres', 'gas', 'alt', 'bat'],
-          }
+            'hdc1080':['temp', 'hum'],
+            'bme280':['temp', 'hum', 'pres'],
+            'bme680':['temp', 'hum', 'pres', 'gas', 'alt'],}
+        # activation i2c
         self.i2c = i2c
+        # initialisation variables
         self.conf_file_name = conf_file_name
-        
+        self.best_host = None
+        self.rssi = None
+        self.channel = None
+        # enclencher la radio et l'activer
+        self.sta, self.ap = (WLAN(i) for i in (STA_IF, AP_IF))
+        self.sta.active(True)
+        # instancier et activer espnow
+        self.espnow = ESPNow()
+        self.espnow.active(True)
+
     def scan_espnow_servers(self):
-        possible_central = []
+        
+        hosts_found = []
         rssi_max = - 100
         rssi_best = None
-        # A WLAN interface must be active to send()/recv()
-        sta = WLAN(STA_IF)
-#         ap = WLAN(AP_IF)
-#         ap.active(False)
-        sta.active(True)
-        sta.config(channel=11)
-        # instantiation of ESPNow
-        espnow = ESPNow()
-        espnow.active(True)
-        # send the brodcast
+        # send the brodcast -> tous les hosts espnow recoivent le broadcast
         bin_mac_adress = unhexlify('ff:ff:ff:ff:ff:ff'.replace(':',''))
-        espnow.add_peer(bin_mac_adress) #conf.PROXY_MAC_ADRESS)
-        if espnow.send(bin_mac_adress, 'PAIRING', True):
-            while True:
-                host, msg = espnow.irecv(timeout_ms=5000)     # Available on ESP32 and ESP8266
-                if msg: # msg == None if timeout in irecv()
-                    decode_msg = msg.decode().split('/')
-                    host = decode_msg[0]
-                    rssi = decode_msg[1]
-                    possible_central.append([host, rssi])
-                    print('host et rssi:', host, rssi)
-                else:
-                    break
-#         print('tx_pkts, tx_responses, tx_failures, rx_packets, rx_dropped_packets', espnow.stats())
-        if possible_central:
-            for i, central in enumerate(possible_central):
-                if int(central[1]) > rssi_max:
+        # l'adresse mac doit être ajoutée auc peers        
+        try:
+            self.espnow.add_peer(bin_mac_adress)  # If user has not already registered peer
+        except OSError:
+            pass
+        # broadcast for all channels
+        print('  ', end='')
+        # pour les channels de 1 à 13
+        for channel in range (1, 14):
+            print(str(channel) + '..', end='')
+            # selectionne le canal
+            self.sta.config(channel=channel)
+            # send a PAIRING message
+            if self.espnow.send(bin_mac_adress, 'PAIRING', True):
+                # attend tous les messages des hosts qui ont reçu la demande
+                while True:
+                    host, msg = self.espnow.irecv(timeout=250) 
+                    if msg: # msg == None if timeout in irecv()
+                        decode_msg = msg.decode().split('/')
+                        host = decode_msg[0]
+                        rssi = decode_msg[1]
+                        # update the list of founds
+                        hosts_found.append([host, rssi, channel])
+                    else:
+                        break # no or no more message to receive
+        if hosts_found:
+            # print the list of hosts founds
+            print()
+            for h in hosts_found:
+                print('  - found host: ' +  str(h[0]), 'channel:' + str(h[2]), 'rssi:' + str(h[1]))
+            # host(s) are found look for best rssi
+            for i, host in enumerate(hosts_found):
+                if int(host[1]) > rssi_max:
                     rssi_best = i
-                    rssi_max = int(central[1])
-            return possible_central[rssi_best][0]
+                    rssi_max = int(host[1])
+            # select the best host and rssi
+            self.best_host = hosts_found[rssi_best][0]
+            self.rssi = hosts_found[rssi_best][1]
+            # look for best channel
+            hosts_channels = []
+            for i, host in enumerate(hosts_found):
+                if host[0] == self.best_host and host[2] not in hosts_channels:
+                    hosts_channels.append(host[2])
+            hosts_channels.sort()
+            count = len(hosts_channels)
+            index = 0 if count == 1 or (count == 2 and hosts_channels[1] == 1) else 1
+            self.channel = hosts_channels[index]            
+            return True
         else:
-            print('No central found')
-            return None
-    
+            print()
+            return False
+
+    # check for sensors connected
     def verify_witch_sensor_is_connected(self, i2c):
         connected_sensors = []
-#         print('self.POSSIBLES_SENSORS:', self.POSSIBLES_SENSORS)
         for sensor_tested in self.POSSIBLES_SENSORS:
+            print(' - ' + sensor_tested + '..', end='')
             if sensor_tested == 'bme280':
-#                 print('sensor_tested:', sensor_tested)
-#                 print('sensor grandeurs:', self.POSSIBLES_SENSORS[sensor_tested])
                 try:
                     sensor = bme280.BME280(i2c=i2c)
                     connected_sensors.append(sensor_tested)
@@ -97,13 +152,13 @@ class AirSensScan:
                     connected_sensors.append(sensor_tested)
                 except:
                     pass
-# tbd
-# retourner une entrée de dictionnaire avec sensoor et quantity
-#
-        return connected_sensors, self.POSSIBLES_SENSORS[sensor_tested]
+        if sensor_tested:
+            print('\n -> found')
+        else:
+            print()
+        return connected_sensors
     
-    def write_actives_sensors_in_conf(self, sensor_list, sensor_quantity):
-        print('sensor, quantity:', sensor_list, sensor_quantity)
+    def write_actives_sensors_in_conf(self, sensor_list):
         with open (self.conf_file_name, 'r') as f:
             lines = f.readlines()
         with open (self.conf_file_name, 'w') as f:
@@ -119,25 +174,44 @@ class AirSensScan:
                 else:
                     f.write(line)
     
+    def write_wifi_channel_in_conf(self, new_channel):
+        with open (self.conf_file_name, 'r') as f:
+            lines = f.readlines()
+        with open (self.conf_file_name, 'w') as f:
+            for line in lines:
+                if 'WIFI_CHANNEL' in line:
+                    new_line = 'WIFI_CHANNEL = ' + str(new_channel) + '\n'
+                    f.write(new_line)
+                else:
+                    f.write(line)
+    
     def write_best_host_in_conf(self, new_mac):
         with open (self.conf_file_name, 'r') as f:
             lines = f.readlines()
         with open (self.conf_file_name, 'w') as f:
             for line in lines:
                 if 'HOST_MAC_ADRESS' in line:
-                    new_line = 'HOST_MAC_ADRESS="' + new_mac + '"\n'
+                    new_line = 'HOST_MAC_ADRESS = "' + new_mac + '"\n'
                     f.write(new_line)
                 else:
                     f.write(line)
     
     def main(self):
-        connected_sensors, sensor_quantity = self.verify_witch_sensor_is_connected(self.i2c)
-        print('sensors detected:', connected_sensors, 'quantity:', sensor_quantity)
-        self.write_actives_sensors_in_conf(connected_sensors, sensor_quantity)
-        
-        best_host = self.scan_espnow_servers()
-        print('best host:', best_host)
-        self.write_best_host_in_conf(best_host)
+        print('checking sensors:')
+        connected_sensors = self.verify_witch_sensor_is_connected(self.i2c)
+        if connected_sensors:
+            GlobalVar.sensor_ok = True
+        for s in connected_sensors:
+            print('   -', s, self.POSSIBLES_SENSORS[s])
+        self.write_actives_sensors_in_conf(connected_sensors)
+        print('scanning hosts on channel:')        
+        if self.scan_espnow_servers():
+            print('  -> best host: ' + str(self.best_host), 'channel:' + str(self.channel), 'rssi:' + str(self.rssi))
+            self.write_best_host_in_conf(self.best_host)
+            self.write_wifi_channel_in_conf(self.channel)
+            GlobalVar.host_ok = True
+        return GlobalVar.sensor_ok and GlobalVar.host_ok            
+            
 
 
 if __name__ == '__main__':
@@ -145,5 +219,12 @@ if __name__ == '__main__':
     # instanciation of I2C
     i2c = SoftI2C(scl=Pin(conf.BME_SCL_PIN), sda=Pin(conf.BME_SDA_PIN), freq=10000)
     scan = AirSensScan(i2c, conf_file_name)
-    scan.main()
+    ok = scan.main()
+    
+    if ok:
+        print('All is ok')
+    else:
+        print('Something goes wrong ...')
+        if not GlobalVar.sensor_ok: print('  - no sensor found')
+        if not GlobalVar.host_ok: print('  - no host found')
 

@@ -1,14 +1,15 @@
 # ESP-now
-HOST_MAC_ADRESS="3C:61:05:0D:67:CC"
+HOST_MAC_ADRESS = "3C:61:05:0D:67:CC"
 WIFI_CHANNEL = 11
 # acquisitions
-SENSOR_LOCATION = 'E8:D4' 
+SENSOR_LOCATION = 'mtl_1' 
 T_DEEPSLEEP_MS = 30000
 # sensor
 SENSORS = {'bme280':['temp', 'hum', 'pres'], }
 # power supply
 TO_PRINT = True
-ON_BATTERY = True
+ON_BATTERY = False
+SOLAR_PANEL = False
 UBAT_100 = 4.2
 UBAT_0 = 3.2
 # I2C hardware config
@@ -27,7 +28,5 @@ AVERAGING_BME = 1
 # PAIR
 LED_PIN = 12
 BUTTON_PAIR_PIN = 14 # no du port gpio
-# SOLAR
-SOLAR = False
 
 
