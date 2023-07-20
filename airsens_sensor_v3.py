@@ -42,6 +42,8 @@ v3.1.0 : 23.06.2023 --> new datmessage structure no more compatible with old ver
 v3.1.1 : 23.06.2023 --> correction on count of messages lost
 v3.1.2 : 25.06.2023 --> standardised the integration of bat and sol in message
 v3.1.3 : 25.06.2023 --> final print improved
+v3.2.4 : 30.06.2023 --> battery and solar pannel voltage transmitted only ones (that of the last sensor)
+v3.3.0 : 08.07.2023 --> stable version for long time test
 """
 
 from utime import ticks_ms, sleep_ms
@@ -49,7 +51,7 @@ start_time = ticks_ms()
 
 # PARAMETERS ========================================
 PRG_NAME = 'airsens_sensor_v3_scan'
-PRG_VERSION = '3.1.3'
+PRG_VERSION = '3.3.0'
 CONF_FILE_NAME = 'airsens_sensor_conf_v3.py'
 import airsens_sensor_conf_v3 as conf  # configuration file
 # IMPORTATIONS ======================================
@@ -64,8 +66,10 @@ from lib.log_and_count import LogAndCount
 log = LogAndCount()
 
 # SENSORS ============================================
+# if 'bme280' in conf.SENSORS:
+#     import lib.bme280 as bme280
 if 'bme280' in conf.SENSORS:
-    import lib.bme280 as bme280
+    import lib.bme280_float as bme280
 if 'bme680' in conf.SENSORS:
     import lib.bme680 as bme680
 if 'hdc1080' in conf.SENSORS:
@@ -86,16 +90,26 @@ PAIR_STATUS = not BTN_PAIR.value()
 # I2C ==================================================
 i2c = SoftI2C(scl=Pin(conf.BME_SCL_PIN), sda=Pin(conf.BME_SDA_PIN), freq=10000)
 # FUNCTIONS ===========================================
+# led flash
 def blink_led(freq='high', n_repeat=3):
     if freq =='high': t_ms = 100
-    elif freq == 'med': t_ms = 200
-    elif freq == 'low': t_ms = 400
-    for n in range(n_repeat):
-        LED.on()
-        sleep_ms(t_ms)
-        LED.off()
-        sleep_ms(t_ms)
-
+    elif freq == 'med': t_ms = 250
+    elif freq == 'low': t_ms = 500
+    elif freq == 'very_low': t_ms = 1000
+    if n_repeat != 0:
+        for n in range(n_repeat):
+            LED.on()
+            sleep_ms(t_ms)
+            LED.off()
+            sleep_ms(t_ms)
+    else:
+        while True:
+            LED.on()
+            sleep_ms(t_ms)
+            LED.off()
+            sleep_ms(t_ms)
+        
+# print and store infos after the end of the measure
 def end_print(total_time, t_deepsleep):
     msg_send = log.counters('passe', True)
     msg_lost = log.counters('lost', False)
@@ -112,18 +126,28 @@ def end_print(total_time, t_deepsleep):
 
 
 def main():
-    # Green button pressed during boot (yellow button)
+    # Green button = pair
+    # Yellow button = reset
+    # enter pair mode if pair button is pressed during reset
     if PAIR_STATUS:
         blink_led('high', 7)
         import lib.airsens_scan as airsens_scan
 
         scan = airsens_scan.AirSensScan(i2c, CONF_FILE_NAME)
-        scan.main()
+        scan_result = scan.main()
         
-        print('in 5s the system will reset the machine with the new parameters')
-        print('-----------------------------------------------')
-        sleep_ms(5000)
-        reset()
+        if scan_result:
+            print('in 5s the system will reset the machine with the new parameters')
+            print('-----------------------------------------------')
+            blink_led('high', 7)
+            sleep_ms(5000)
+            reset()
+        else:
+            log.log_error('pairing not succesfull, retry' , to_print = True)
+            blink_led('low', 0)
+            exit
+            
+            
     # Normal measurement (no button pressed on boot)
     try:
         host_mac = unhexlify(conf.HOST_MAC_ADRESS.replace(':',''))
@@ -131,9 +155,8 @@ def main():
         if conf.TO_PRINT:
             print('=================================================')
             print(PRG_NAME + ' v' + PRG_VERSION )
-            print('Host mac:  ', conf.HOST_MAC_ADRESS)
+            print('Host mac:  ' + conf.HOST_MAC_ADRESS, 'channel:' + str(conf.WIFI_CHANNEL))
             print('Sensor mac:', sensor_mac)
-            print('WIFI channel:', conf.WIFI_CHANNEL)
         
         # A WLAN interface must be active to send()/recv()
         sta = WLAN(STA_IF)
@@ -171,23 +194,24 @@ def main():
                     msg += measurement + ':' + str(value / conf.AVERAGING_BME) + ';'
             msg = msg[:-1]          
 
-            # read the battery voltage
-            bat = 0	
-            if conf.ON_BATTERY:
-                for l in range(conf.AVERAGING_BAT):
-                    bat += bat_adc_in.read()
-                bat = bat / conf.AVERAGING_BAT * (2 / 4095) / conf.DIV
-                msg += ';bat:' + str(bat) + ''
-                measurements.append(msg)
+            bat = 0
+            sol = 0
+            if i == len(conf.SENSORS) - 1: # only 1 measure of bat and solar pannel
+                # read the battery voltage
+                if conf.ON_BATTERY:
+                    for l in range(conf.AVERAGING_BAT):
+                        bat += bat_adc_in.read()
+                    bat = bat / conf.AVERAGING_BAT * (2 / 4095) / conf.DIV
+                    msg += ';bat:' + str(bat) + ''
+                    measurements.append(msg)
 
-            # read the solar panel voltage
-            sol = 0	
-            if conf.SOLAR_PANEL:
-                for l in range(conf.AVERAGING_BAT):
-                    sol += sol_adc_in.read()
-                sol = sol / conf.AVERAGING_BAT * (2 / 4095) / conf.DIV
-                msg += ';sol:' + str(sol) + ''
-                measurements.append(msg)
+                # read the solar panel voltage
+                if conf.SOLAR_PANEL:
+                    for l in range(conf.AVERAGING_BAT):
+                        sol += sol_adc_in.read()
+                    sol = sol / conf.AVERAGING_BAT * (2 / 4095) / conf.DIV
+                    msg += ';sol:' + str(sol) + ''
+                    measurements.append(msg)
     
             if conf.TO_PRINT: print(msg)
             
@@ -209,7 +233,7 @@ def main():
             # not on battery so finish the measure
             end_print(total_time, t_deepsleep)
         else:
-            if float(bat) > conf.UBAT_0:
+            if bat > conf.UBAT_0:
                 # battery is ok so finishing tasks
                 end_print(total_time, t_deepsleep)
             else:
@@ -218,13 +242,13 @@ def main():
                 for i in range(pass_to_wait):
                     if conf.TO_PRINT: print('going to endless deepsleep in ' + str(pass_to_wait - i) + ' s')
                     sleep_ms(1000)
-                log.log_error('Endless deepsleep due to low battery Ubat=' + str(bat) , to_print = True)
+                log.log_error('Endless deepsleep due to low battery Ubat = ' + '{:.2f}'.format(bat) , to_print = True)
                 deepsleep()
         
     except Exception as err:
         log.counters('error', True)
         log.log_error('airsens_sensor main error', log.error_detail(err), to_print=True)
-        if conf.TO_PRINT: print('going to deepsleep for: ' + str(conf.T_DEEPSLEEP_MS) + ' ms')
+        if conf.TO_PRINT: print('going to deepsleep for: ' + str(conf.T_DEEPSLEEP_MS) + 'ms')
         deepsleep(conf.T_DEEPSLEEP_MS)
 
 if __name__ == "__main__":

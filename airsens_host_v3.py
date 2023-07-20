@@ -320,7 +320,7 @@ class Host:
             
 
     def main(self):
-        try:
+#         try:
             self.ttgo_display.cls()
             self.ttgo_display.write_centred_line(0, '... Initialazing ...', color=self.ttgo_display.COLOR_CYAN)
             self.ttgo_display.write_centred_line(2, PROGRAM_NAME, color=self.ttgo_display.COLOR_YELLOW)
@@ -388,13 +388,17 @@ class Host:
                             print()
                     elif 'message de test' in msg.decode('utf-8'):
                         print(msg)
+                    elif 'scan channels' in msg.decode('utf-8'):
+                        print(msg)
+                        self.espnow.send(peer, str(sta.status('rssi')))
                     else:
-                        try:
+#                         try:
                             if len(msg.decode('utf-8').strip()) > 0:
                                 '''New message received'''
 #                                 jmb_id, location, sensor_type, rx_measurements = msg.decode('utf-8').split(',')
                                 jmb_validation, sensor_id, sensor_location, sensor_type, rx_measurements = msg.decode('utf-8').split(',')
                                 rx_measurements = rx_measurements.split(';')
+#                                 print(rx_measurements)
                                 # format the numbers for the small display
                                 mes_list = []
                                 mes_dict = {}
@@ -405,35 +409,45 @@ class Host:
                                 mes_dict['pres'] = [0, '{:.0f}', '{:.0f}']
                                 mes_dict['gas'] = [0, '{:.0f}', '{:.0f}']
                                 mes_dict['alt'] = [0, '{:.0f}', '{:.0f}']
-                                mes_dict['bat'] = [0, '{:.2f}', '{:.2f}']
+                                mes_dict['sol'] = [-99, '{:.2f}', '{:.2f}']
+                                mes_dict['bat'] = [-99, '{:.2f}', '{:.2f}']
                                 # pour chaque grandeur dans rx_measurment
                                 for rx_mes in rx_measurements:
-                                    # separe grandeur and value [0] pour grandeur, [1] pour valeur
-                                    rx_mes = rx_mes.split(':')
-                                    # read the mes_dict value for this grandeur
-                                    dict_record = mes_dict[rx_mes[0]]
-                                    # set the new value for this record
-                                    dict_record[0] = float(rx_mes[1])
-                                    # update the mes_dict 
-                                    mes_dict[rx_mes[0]] = dict_record
-                                    # append this grandeur to the list of measurements
-                                    mes_list.append(rx_mes[0])
+#                                     print('rx_mes:', rx_mes)
+                                    if rx_mes:
+                                        # separe grandeur and value [0] pour grandeur, [1] pour valeur
+                                        rx_mes = rx_mes.split(':')
+                                        # read the mes_dict value for this grandeur
+                                        dict_record = mes_dict[rx_mes[0]]
+                                        # set the new value for this record
+                                        dict_record[0] = float(rx_mes[1])
+                                        # update the mes_dict 
+                                        mes_dict[rx_mes[0]] = dict_record
+                                        # append this grandeur to the list of measurements
+                                        mes_list.append(rx_mes[0])
+                                if float(mes_dict['bat'][0]) != -99:
+                                    # append the bat, bat_f, bat_pc, bat_pc_f tp the list of measurements
+                                    bat = float(mes_dict['bat'][0])
+                                    bat_f = '{:.2f}'.format(bat)
+                                    bat_pc = min(((bat * conf.BAT_PENTE) + conf.BAT_OFFSET), 100)  
+                                    bat_pc_f = '{:.0f}'.format(bat_pc)
                                     
-                                # append the bat, bat_f, bat_pc, bat_pc_f tp the list of measurements
-                                bat = float(mes_dict['bat'][0])
-                                bat_f = '{:.2f}'.format(bat)
-                                bat_pc = min(((bat * conf.BAT_PENTE) + conf.BAT_OFFSET), 100)  
-                                bat_pc_f = '{:.0f}'.format(bat_pc)
-                                
-                                # change the color for the battery to indicate the charge state
-                                if float(bat) < conf.BAT_LOW:
-                                    color_bat = self.ttgo_display.COLOR_RED
-                                elif conf.BAT_LOW <= float(bat) <= conf.BAT_OK:
-                                    color_bat = self.ttgo_display.COLOR_ORANGE
-                                elif float(bat) > conf.BAT_OK:
-                                    color_bat = self.ttgo_display.COLOR_GREEN
+                                    # change the color for the battery to indicate the charge state
+                                    if float(bat) < conf.BAT_LOW:
+                                        color_bat = self.ttgo_display.COLOR_RED
+                                    elif conf.BAT_LOW <= float(bat) <= conf.BAT_OK:
+                                        color_bat = self.ttgo_display.COLOR_ORANGE
+                                    elif float(bat) > conf.BAT_OK:
+                                        color_bat = self.ttgo_display.COLOR_GREEN
+                                    else:
+                                        color_bat = self.ttgo_display.COLOR_WHITE
                                 else:
+                                    bat = 0
+                                    bat_f = '{:.2f}'.format(bat)
+                                    bat_pc = 0  
+                                    bat_pc_f = 0
                                     color_bat = self.ttgo_display.COLOR_WHITE
+                                    
                                 
                                 # prepare the list of éléments for adding a new measurement
                                 new_measurement_list = [
@@ -465,42 +479,34 @@ class Host:
                                     self.log.log_error('Connection to ' + conf.WIFI_SSID + ' not possible', to_print = True)            
                                     self.reset_esp32()
 
-#                                 if not sta.isconnected():
-#                                     sta = self.wifi_reset()  # Reset Wi-FI to AP
-#                                     sta.connect(conf.WIFI_SSID, conf.WIFI_PW)
-#                                     while not sta.isconnected():
-#                                         sleep_ms(200)
-#                                     self.log.log_error('WIFI connection lost, reconnecting', to_print = True)
-#                                     sta.config(ps_mode=WIFI_PS_NONE)  # ..then disable power saving
-
                                 # has the message the right identificator
                                 if jmb_validation == 'jmb':
                                     passe = self.log.counters('passe', True)
-                                    try:
-                                        # create the list of data  to send
-                                        txt_mes = [conf.TOPIC, sensor_location]
-                                        # append the values in the list
-                                        mes = []
-                                        for act_mes in mes_list:
-                                            mes.append(mes_dict[act_mes][0])
-                                        txt_mes.append(str(mes).replace(',',':'))
-                                        # add the rssi to the list
-                                        txt_mes.append(str(sta.status('rssi')))
-        #                                 print(txt_mes)
-                                        # create the message
-                                        msg = ','.join(txt_mes)
-                                        # send the message to MQTT
-#                                         client = self.mqtt_connect_and_subscribe()  # conf.BROKER_CLIENT_ID, conf.BROKER_IP, conf.TOPIC)
-#                                         if client is not None:
-#                                             client.publish(conf.TOPIC, msg)
-#         #                                     print('msg sended to mqtt:', msg)
-#                                             client.disconnect()
-#                                         else:
-#                                             self.log.log_error('MQTT client is None', to_print = True)
+#                                     try:
+                                    # create the list of data  to send
+                                    txt_mes = [conf.TOPIC, sensor_location]
+                                    # append the values in the list
+                                    mes = []
+                                    for act_mes in mes_list:
+                                        mes.append(mes_dict[act_mes][0])
+                                    txt_mes.append(str(mes).replace(',',':'))
+                                    # add the rssi to the list
+                                    txt_mes.append(str(sta.status('rssi')))
+                                    # create the message
+                                    msg = ','.join(txt_mes)
+                                    # send the message to MQTT
+#                                     client = self.mqtt_connect_and_subscribe()  # conf.BROKER_CLIENT_ID, conf.BROKER_IP, conf.TOPIC)
+#                                     if client is not None:
+# #                                             print(client)
+#                                         client.publish(conf.TOPIC, msg)
+# #                                         print('msg sended to mqtt:', conf.TOPIC, str([msg]))
+#                                         client.disconnect()
+#                                     else:
+#                                         self.log.log_error('MQTT client is None', to_print = True)
 
-                                    except Exception as err:
-                                        self.log.log_error('MQTT publish', self.log.error_detail(err), to_print = True)
-                                        self.reset_esp32()
+#                                     except Exception as err:
+#                                         self.log.log_error('MQTT publish', self.log.error_detail(err), to_print = True)
+#                                         self.reset_esp32()
                                     # init the list of data to print
                                     txt_mes = [str(passe), self.get_formated_time(), conf.TOPIC, sensor_id, sensor_location, sensor_type]
                                     # add the values with the format
@@ -518,12 +524,12 @@ class Host:
                                         
                                 else:
                                     self.log.log_error('wrong message received', to_print = True)
-                        except Exception as err:
-                            self.log.log_error('Main', self.log.error_detail(err), to_print = True)
-                            self.reset_esp32()
-        except Exception as err:
-            self.log.log_error('Main', self.log.error_detail(err), to_print = True)
-            self.reset_esp32()
+#                         except Exception as err:
+#                             self.log.log_error('Main', self.log.error_detail(err), to_print = True)
+#                             self.reset_esp32()
+#         except Exception as err:
+#             self.log.log_error('Main', self.log.error_detail(err), to_print = True)
+#             self.reset_esp32()
 
 def main():
     host = Host()

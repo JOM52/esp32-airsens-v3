@@ -10,14 +10,16 @@ github: https://github.com/JOM52/esp32-airsens-class
 v0.4.0 : 05.02.2023 --> first prototype
 v0.4.1 : 05.03.2023 --> small changes Venezia
 v0.4.2 : renamed to airsens_host_conf.py
+v0.4.3 : battery level values adjusted
 """
 from ubinascii import hexlify
 from machine import unique_id
 #SYSTEM
 WAIT_TIME_ON_RESET = 10 # seconds to wait before the machine reset in case of error
 # MQTT
-BROKER_IP = '192.168.1.108'
-TOPIC = 'airsens_v2'
+# BROKER_IP = '192.168.1.108'
+BROKER_IP = '10.0.0.120'
+TOPIC = 'airsens_v3'
 BROKER_CLIENT_ID = hexlify(unique_id())
 
 # TTGO
@@ -39,9 +41,9 @@ WIFI_PW = 'Gd489337'
 
 # BATTERY
 BAT_MAX = 4.2 # 100%
-BAT_MIN = 3.2 # 0%
-BAT_OK = 3.4 # si ubat plus grand -> ok
-BAT_LOW = 3.3 # si ubat plus petit -> alarm
+BAT_MIN = 3.6 # 0%
+BAT_OK = BAT_MIN + 0.2 # si ubat plus grand -> ok
+BAT_LOW = BAT_MIN + 0.1 # si ubat plus petit -> alarm
 BAT_PENTE = (100-0)/(BAT_MAX-BAT_MIN)
 BAT_OFFSET = 100 - BAT_PENTE * BAT_MAX
 # print('Charge bat % = ' + str(BAT_PENTE) + ' * Ubat' + ' + ' + str(BAT_OFFSET))
