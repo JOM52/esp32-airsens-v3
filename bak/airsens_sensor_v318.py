@@ -45,8 +45,7 @@ v3.1.3 : 25.06.2023 --> final print improved
 v3.2.4 : 30.06.2023 --> battery and solar pannel voltage transmitted only ones (that of the last sensor)
 v3.3.0 : 08.07.2023 --> stable version for long time test
 v3.3.1 : 23.11.2023 --> added reset if error in main loop
-v3.3.2 : 26.11.2023 --> improve main error handling
-v3.3.3 : 28.04.2024 --> using the new log_sensor module instead of log_and_count 
+v3.3.2 : 26.11.2023 --> improve main error handling 
 """
 
 from utime import ticks_ms, sleep_ms
@@ -54,7 +53,7 @@ start_time = ticks_ms()
 
 # PARAMETERS ========================================
 PRG_NAME = 'airsens_sensor_v3_scan'
-PRG_VERSION = '3.3.3'
+PRG_VERSION = '3.3.2'
 CONF_FILE_NAME = 'airsens_sensor_conf_v3.py'
 import airsens_sensor_conf_v3 as conf  # configuration file
 # IMPORTATIONS ======================================
@@ -65,8 +64,8 @@ from machine import unique_id
 from sys import exit
 from network import WLAN, STA_IF, AP_IF
 from espnow import  ESPNow
-from lib.log_sensor import LogSensors
-log = LogSensors()
+from lib.log_and_count import LogAndCount
+log = LogAndCount()
 
 # SENSORS ============================================
 # if 'bme280' in conf.SENSORS:
@@ -119,7 +118,7 @@ def end_print(total_time, t_deepsleep):
     msg_good = msg_send - msg_lost
     if conf.TO_PRINT:
         print('msg send:' + str(msg_send) + ' good:' + str(msg_good) + ' lost:' + str(msg_lost) +
-              ' error:' + str(log.counters('error', False)), '-->' , str(total_time) + 'ms')
+              ' - error:' + str(log.counters('error', False)), '-->' , str(total_time) + 'ms')
         print('going to deepsleep for: ' + str(t_deepsleep) + ' ms')
         print('=================================================')
     else:
@@ -150,7 +149,6 @@ def main():
             blink_led('low', 0)
             exit
             
-    bat = -9999
             
     # Normal measurement (no button pressed on boot)
     try:
@@ -198,8 +196,6 @@ def main():
                     msg += measurement + ':' + str(value / conf.AVERAGING_BME) + ';'
             msg = msg[:-1]          
 
-#             q = 1/0
-
             bat = 0
             sol = 0
             if i == len(conf.SENSORS) - 1: # only 1 measure of bat and solar pannel
@@ -225,7 +221,6 @@ def main():
             msg_received_by_host = espnow.send(host_mac, msg, True)
             if not msg_received_by_host:
                 log.counters('lost', True)
-                log.log_error('message is gone lost' , to_print = True)
                 
         # close the communication canal
         espnow.active(False)
@@ -254,13 +249,11 @@ def main():
         
     except Exception as err:
         log.counters('error', True)
-        print(err)
         log.log_error('airsens_sensor main error', log.error_detail(err), to_print=True)
-        
         if bat > conf.UBAT_0:
             if conf.TO_PRINT: print('going to deepsleep for: ' + str(conf.T_DEEPSLEEP_MS) + 'ms' + '{:.2f}'.format(bat))
             deepsleep(conf.T_DEEPSLEEP_MS)
-        elif bat != -9999:
+        else:
             if conf.TO_PRINT: print('Endless deepsleep due to error and low battery Ubat = ' + '{:.2f}'.format(bat))
             deepsleep()
 

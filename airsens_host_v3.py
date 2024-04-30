@@ -13,7 +13,7 @@ v0.4.1 : 26.02.2023 --> optimisation du fichier conf
 v0.4.2 : 27.02.2023 --> amelioration de la boucle Main
 v0.4.3 : 28.02.2023 --> grand nettoyage
 v0.4.4 : 01.03.2022 --> button_1_action simplified
-v0.4.5 : 05.03.2023 --> small changes Venezia
+v0.4.5 :05.03.2023 --> small changes Venezia
 v1.0.0 : 11.03.2023 --> first production version
 v1.1.0 : 07.04.2023 --> adaptation for domoticz process begin
 -----------------------------------------------------------------------
@@ -30,26 +30,34 @@ v3.0.0 : 30.05.2023 --> Begin with version3 of hard and soft. News are:
 v3.0.1 : 10.06.2023 --> automatic pairing in developpement
 v3.0.2 : 21.06.2023 --> renamed the program to airsens_host_v3.py
 -----------------------------------------------------------------------
-v3.1.0 : 23.06.2023 --> new datmessage structure no more compatible with old versions. 
+v3.1.0 : 23.06.2023 --> new datmessage structure no more compatible with old versions.
+v3.1.1 : 30.06.2023 --> mqtt in service again (keepalive=60)
+v3.1.2 : 14.11.2023 --> added reset, corrected display of mac and added uPython version on about menu
+v3.1.3 : 09.01.2024 --> corrigé affichage de l'adresse capteur sur la page Overview
+v3.1.4 : 22.03.2024 --> ajouté l'heure de la dernière acquis sur l'affichage 'AUTO'
+v3.1.5 : 22.03.2024 --> désactivé le menu 'RESET'
+v3.1.6 : 16.04.2024 --> ajouté la synchronistion RTC et dans le menu "about" la page "last measure"'
+v3.1.7 : 19.04.2024 --> synchronise esp32 sur le net (ntptime)
+v3.1.8 : 19.04.2024 --> optimized the page "Last measure"
 """
-VERSION = '3.1.0'
+VERSION = '3.1.8'
 PROGRAM_NAME = 'airsens_host_v3.py'
 PROGRAM_NAME_SHORT = 'airsens'
-print('Loading "' + PROGRAM_NAME + '" v' + VERSION + ' this may take a while, please be patient ...')
+print('Loading "' + PROGRAM_NAME + '" v' + VERSION + ' this may take a while ...')
 import airsens_host_conf_v3 as conf
 
 from ubinascii import hexlify, unhexlify
-from machine import Pin, Timer, reset
+from machine import Pin, Timer, reset, RTC
 from espnow import ESPNow
-from utime import sleep_ms, localtime, time, gmtime
+from utime import sleep_ms, time, gmtime, localtime
 from network import WLAN, STA_IF, AP_IF, WIFI_PS_NONE
-from ntptime import settime
+from ntptime import settime, time as ntptime
 from math import ceil
+from os import uname
 
 from lib.log_and_count import LogAndCount
 from lib.ttgo_display import TtgoTdisplay
-from lib.umqttsimple import MQTTClient
-
+from lib.simple import MQTTClient
 
 class GlobalVar:
     data_pointer = None
@@ -60,7 +68,9 @@ class GlobalVar:
     sta = None
     channel = None
     rssi = None
-    
+    last_mes = []
+    last_mes_time = None
+    last_mes_sensor = None
 
 
 class Show:
@@ -75,6 +85,28 @@ class Show:
         self.refresh_screen_timer = Timer(0)  # timer to switch to the next ecran
         self.refresh_screen_timer.init(period=conf.REFRESH_SCREEN_TIMER_MS, mode=Timer.PERIODIC,
                                        callback=self.refresh_screen_from_timer)
+    
+    def get_formated_time(self, time=None, ret_type=None):
+        if time is None:
+            dt = localtime()
+        else:
+            dt = time
+#         year = int(str(dt[0])[2:])
+        year = '{:02d}'.format(int(str(dt[0])[2:]))
+        month = '{:02d}'.format(dt[1])
+        day = '{:02d}'.format(dt[2])
+        hour = '{:02d}'.format(dt[3])
+        minute = '{:02d}'.format(dt[4])
+        second = '{:02d}'.format(dt[5])
+        
+        if ret_type == None:
+            return day + '.' + month + '.' + year + ' ' + hour + ':' + minute + ':' + second
+        elif ret_type == 'd':
+            return day + '.' + month + '.' + year 
+        elif ret_type == 't':
+            return hour + ':' + minute + ':' + second
+        else:
+            return '-.-.- -:-:-'
 
     # called by the timer because he give a not usefull param
     # and the procedure refresh_screen don't use it
@@ -97,26 +129,57 @@ class Show:
                                        current_page=GlobalVar.current_page, current_mode=GlobalVar.current_mode)
         elif GlobalVar.current_mode == 3: # mode About
             if GlobalVar.current_page == 0:
-                self.ttgo_display.write_line(0, PROGRAM_NAME_SHORT + ' v' + VERSION + '  p1/2', color=self.ttgo_display.COLOR_WHITE)  
+                self.ttgo_display.write_line(0, PROGRAM_NAME_SHORT + ' v' + VERSION + '  p1/4', color=self.ttgo_display.COLOR_WHITE)  
                 self.ttgo_display.write_about_line(1,'MAC:', str(hexlify(GlobalVar.mac_wlan, ':').decode().upper()))
                 self.ttgo_display.write_about_line(2,'WIFI channel:', str(GlobalVar.sta.config("channel")))
                 self.ttgo_display.write_about_line(3,'WAN:', conf.WIFI_SSID)
                 self.ttgo_display.write_about_line(4,'host IP:', str(GlobalVar.sta.ifconfig()[0]))
             elif GlobalVar.current_page == 1:
-                self.ttgo_display.write_line(0, PROGRAM_NAME_SHORT + ' v' + VERSION + '  p2/2', color=self.ttgo_display.COLOR_WHITE)  
+                self.ttgo_display.write_line(0, PROGRAM_NAME_SHORT + ' v' + VERSION + '  p2/4', color=self.ttgo_display.COLOR_WHITE)  
                 self.ttgo_display.write_about_line(1,'MQTT topic:', '')
-                self.ttgo_display.write_about_line(2,'   ', conf.TOPIC)
+                self.ttgo_display.write_about_line(2,'   ', conf.BROKER_TOPIC)
                 self.ttgo_display.write_about_line(3,'MQTT broker IP:', '')
                 self.ttgo_display.write_about_line(4,'   ', conf.BROKER_IP)
-            else:
-                self.ttgo_display.write_line(1, 'No datas', color=self.ttgo_display.COLOR_RED)
+            elif GlobalVar.current_page == 2:
+                v_name = uname()[1]
+                v = uname()[3]
+                v_all = v.split(' ')
+                v_detail = v_all[0].split('-')
+                v_version = v_detail[0]
+                v_plus = v_detail[1] + '-' + v_detail[2] + '-' + v_detail[3]
+                v_date = v_all[2]
+                self.ttgo_display.write_line(0, PROGRAM_NAME_SHORT + ' v' + VERSION + '  p3/4', color=self.ttgo_display.COLOR_WHITE)  
+                self.ttgo_display.write_about_line(1, 'uPython version:', '')
+                self.ttgo_display.write_about_line(2, '', v_name + ' ' + v_version)
+                self.ttgo_display.write_about_line(3, '', v_plus)
+                self.ttgo_display.write_about_line(4, '', v_date)
+            elif GlobalVar.current_page == 3:
+                self.ttgo_display.write_line(0, PROGRAM_NAME_SHORT + ' v' + VERSION + '  p4/4', color=self.ttgo_display.COLOR_WHITE)  
+                self.ttgo_display.write_line(1,'Last measure', '', '', color=self.ttgo_display.COLOR_ORANGE)
+                if GlobalVar.last_mes:
+                    row_index = 2
+                    i_max = len(GlobalVar.last_mes) # - 1
+                    i_min = 0 if i_max < 3 else i_max - 3
+                    for i in range(i_max, i_min, -1):
+                        list_index = i - 1
+                        self.ttgo_display.write_line_lastmes(row_index, GlobalVar.last_mes[list_index][0][:5],
+                                                              self.get_formated_time(GlobalVar.last_mes[list_index][1], 'd'),
+                                                              self.get_formated_time(GlobalVar.last_mes[list_index][1], 't'),
+                                                              txt_color=self.ttgo_display.COLOR_CYAN,
+                                                              val_color=self.ttgo_display.COLOR_YELLOW)
+                        row_index += 1
+                        
+                else:
+                    self.ttgo_display.write_line(2, 'No datas', color=self.ttgo_display.COLOR_RED)
+#         elif GlobalVar.current_mode == 4: # mode Reset
+#             reset()
 
 
     # display the data for the modes auto
     def display_auto(self, datas, data_pointer):
         if datas:
             location, temp_f, hum_f, pres_f, bat_val, bat_f, bat_pc_f, bat_color = datas[data_pointer]
-            self.ttgo_display.write_line(0, location, color=self.ttgo_display.COLOR_WHITE)
+            self.ttgo_display.write_line(0, location[-8:], color=self.ttgo_display.COLOR_WHITE)
             self.ttgo_display.write_line(1, 'Temp = ' + str(temp_f) + '"C', color=self.ttgo_display.COLOR_CYAN)
             self.ttgo_display.write_line(2, 'Hum  = ' + str(hum_f) + '%', color=self.ttgo_display.COLOR_CYAN)
             if float(pres_f) > 0:
@@ -139,11 +202,11 @@ class Show:
                     row = i - current_page * n_row + 1
                     location, temp_f, hum_f, pres_f, bat_val, bat_f, bat_pc_f, bat_color = data_list[i]
                     if current_mode == 1:
-                        self.ttgo_display.write_line_overview(row, location, str(temp_f) + 'C', str(hum_f) + '%',
+                        self.ttgo_display.write_line_overview(row, '...' + location[-8:], str(temp_f) + 'C', str(hum_f) + '%',
                                                               txt_color=self.ttgo_display.COLOR_CYAN,
                                                               val_color=self.ttgo_display.COLOR_YELLOW)
                     elif current_mode == 2:
-                        self.ttgo_display.write_line_bat(row, location, str(bat_f) + 'V', str(bat_pc_f) + '%',
+                        self.ttgo_display.write_line_bat(row, '...' + location[-8:], str(bat_f) + 'V', str(bat_pc_f) + '%',
                                                          txt_color=self.ttgo_display.COLOR_CYAN, bat_color=bat_color)
         else:
             self.ttgo_display.write_line(1, 'No datas', color=self.ttgo_display.COLOR_RED)
@@ -203,7 +266,7 @@ class Menu:
         self.show.refresh_screen()
 
     def button_1_action(self):
-        MODES = ['AUTO', 'OVERVIEW', 'BATTERY', 'ABOUT'] # modes
+        MODES = ['AUTO', 'OVERVIEW', 'BATTERY', 'ABOUT']# , 'RESET'] # modes
         self.choice_ok_timer.deinit()
         self.ttgo_display.cls()
         # increment ttgo_curent_mode and reset if too big
@@ -232,7 +295,7 @@ class Menu:
             GlobalVar.current_page = self.get_next_page(self.datas, len_liste, GlobalVar.current_page, current_page_inc)
         elif GlobalVar.current_mode == 3:
             # mode About
-            GlobalVar.current_page = (GlobalVar.current_page + 1) % 2
+            GlobalVar.current_page = (GlobalVar.current_page + 1) % 4
             pass
            
         self.show.refresh_screen_timer.init(period=conf.REFRESH_SCREEN_TIMER_MS, mode=Timer.PERIODIC,
@@ -259,7 +322,7 @@ class Host:
         self.ttgo_display.cls()
 
         GlobalVar.current_mode = conf.DEFAULT_MODE  # default state
-        GlobalVar.current_page = 0
+        GlobalVar.current_page = conf.DEFAULT_PAGE # 0
         GlobalVar.data_pointer = -1  # start value
 
         # initialisation listes
@@ -274,22 +337,22 @@ class Host:
         self.espnow = ESPNow()
         self.espnow.active(True)
     
-    def get_formated_time(self, time=None):
-        if time is None:
-            dt = localtime()
-        else:
-            dt = localtime(int(time))
-        year = '{:04d}'.format(dt[0])
-        month = '{:02d}'.format(dt[1])
-        day = '{:02d}'.format(dt[2])
-        hour = '{:02d}'.format(dt[3])
-        minute = '{:02d}'.format(dt[4])
-        second = '{:02d}'.format(dt[5])
-        return day + '.' + month + '.' + year + ' ' + hour + ':' + minute + ':' + second
+    def init_rtc(self):
+        # init RTC
+        rtc = RTC()
+        settime()
+        (year, month, day, weekday, hours, minutes, seconds, subseconds) = rtc.datetime()
+        sec = ntptime()
+        timezone_hour = conf.TIMEZONE
+        timezone_sec = timezone_hour * 3600
+        sec = int(sec + timezone_sec)
+        (year, month, day, hours, minutes, seconds, weekday, yearday) = localtime(sec)
+        rtc.datetime((year, month, day, 0, hours, minutes, seconds, 0))
+
     
     def mqtt_connect_and_subscribe(self):
         try:
-            client = MQTTClient(conf.BROKER_CLIENT_ID, conf.BROKER_IP)
+            client = MQTTClient(conf.BROKER_CLIENT_ID, conf.BROKER_IP, keepalive=60)
             client.connect(True)
             return client
         except Exception as err:
@@ -317,10 +380,15 @@ class Host:
             wait_time -= 1
         reset()
 
+    def record_last_measure(self, last_mes_location, last_mes_time):
+        for i, m in enumerate(GlobalVar.last_mes):
+            if last_mes_location in m:
+                del(GlobalVar.last_mes[i])
+        d = [last_mes_location, last_mes_time]
+        GlobalVar.last_mes.append([last_mes_location, last_mes_time])
             
-
     def main(self):
-#         try:
+        try:
             self.ttgo_display.cls()
             self.ttgo_display.write_centred_line(0, '... Initialazing ...', color=self.ttgo_display.COLOR_CYAN)
             self.ttgo_display.write_centred_line(2, PROGRAM_NAME, color=self.ttgo_display.COLOR_YELLOW)
@@ -352,18 +420,22 @@ class Host:
             GlobalVar.rssi = sta.status("rssi")
             # print welcome message
             print(PROGRAM_NAME + ' v' + VERSION)
-            print(self.get_formated_time())
+            print(self.show.get_formated_time())
             print(" ".join(["WLAN STA:",  str(GlobalVar.mac_formated), 'channel:', str(GlobalVar.channel)]))
             print('Host IP:', sta.ifconfig()[0])
             print('Host WLAN:', conf.WIFI_SSID)
-            print('MQTT broker IP: ' + conf.BROKER_IP + ' topic: ' + conf.TOPIC)
+            print('MQTT broker IP: ' + conf.BROKER_IP + ' topic: ' + conf.BROKER_TOPIC)
             print('------------------------------------------------------------------------------------------------------')
+            self.show.refresh_screen()
             # Setup the button input pin with a pull-up resistor.
             button_mode = Pin(conf.BUTTON_MODE_PIN, Pin.IN, Pin.PULL_UP)
             button_ecran = Pin(conf.BUTTON_PAGE_PIN, Pin.IN, Pin.PULL_UP)
             # Register an interrupt on rising button input.
             button_ecran.irq(self.menu.button_debounce, Pin.IRQ_RISING)
             button_mode.irq(self.menu.button_debounce, Pin.IRQ_RISING)
+            # init RTC
+            rtc = RTC()
+            self.init_rtc()
             # for ever loop
             while True:
                 peer, msg = self.espnow.recv()
@@ -392,28 +464,27 @@ class Host:
                         print(msg)
                         self.espnow.send(peer, str(sta.status('rssi')))
                     else:
-#                         try:
+                        try:
                             if len(msg.decode('utf-8').strip()) > 0:
                                 '''New message received'''
-#                                 jmb_id, location, sensor_type, rx_measurements = msg.decode('utf-8').split(',')
                                 jmb_validation, sensor_id, sensor_location, sensor_type, rx_measurements = msg.decode('utf-8').split(',')
+                                dt = rtc.datetime()
+                                self.record_last_measure(sensor_location, (dt[0], dt[1], dt[2], dt[4], dt[5], dt[6]))
                                 rx_measurements = rx_measurements.split(';')
-#                                 print(rx_measurements)
                                 # format the numbers for the small display
                                 mes_list = []
                                 mes_dict = {}
                                 # structure of dictionary
                                 # mes_dict['grandeur'] = [value, format for print, format for small ttgo display]
                                 mes_dict['temp'] = [0, '{:.2f}', '{:.1f}']
-                                mes_dict['hum'] = [0, '{:.0f}', '{:.0f}']
-                                mes_dict['pres'] = [0, '{:.0f}', '{:.0f}']
+                                mes_dict['hum'] = [0, '{:.1f}', '{:.0f}']
+                                mes_dict['pres'] = [0, '{:.1f}', '{:.0f}']
                                 mes_dict['gas'] = [0, '{:.0f}', '{:.0f}']
                                 mes_dict['alt'] = [0, '{:.0f}', '{:.0f}']
                                 mes_dict['sol'] = [-99, '{:.2f}', '{:.2f}']
                                 mes_dict['bat'] = [-99, '{:.2f}', '{:.2f}']
                                 # pour chaque grandeur dans rx_measurment
                                 for rx_mes in rx_measurements:
-#                                     print('rx_mes:', rx_mes)
                                     if rx_mes:
                                         # separe grandeur and value [0] pour grandeur, [1] pour valeur
                                         rx_mes = rx_mes.split(':')
@@ -451,8 +522,7 @@ class Host:
                                 
                                 # prepare the list of éléments for adding a new measurement
                                 new_measurement_list = [
-#                                     sensor_location,
-                                    sensor_id[-10:],
+                                    sensor_id, #[:8],
                                     mes_dict['temp'][2].format(mes_dict['temp'][0]),
                                     mes_dict['hum'][2].format(mes_dict['hum'][0]),
                                     mes_dict['pres'][2].format(mes_dict['pres'][0]),
@@ -483,39 +553,51 @@ class Host:
                                 if jmb_validation == 'jmb':
                                     passe = self.log.counters('passe', True)
 #                                     try:
-                                    # create the list of data  to send
-                                    txt_mes = [conf.TOPIC, sensor_location]
-                                    # append the values in the list
-                                    mes = []
-                                    for act_mes in mes_list:
-                                        mes.append(mes_dict[act_mes][0])
-                                    txt_mes.append(str(mes).replace(',',':'))
-                                    # add the rssi to the list
-                                    txt_mes.append(str(sta.status('rssi')))
-                                    # create the message
-                                    msg = ','.join(txt_mes)
-                                    # send the message to MQTT
-#                                     client = self.mqtt_connect_and_subscribe()  # conf.BROKER_CLIENT_ID, conf.BROKER_IP, conf.TOPIC)
-#                                     if client is not None:
-# #                                             print(client)
-#                                         client.publish(conf.TOPIC, msg)
-# #                                         print('msg sended to mqtt:', conf.TOPIC, str([msg]))
-#                                         client.disconnect()
-#                                     else:
-#                                         self.log.log_error('MQTT client is None', to_print = True)
-
+#                                         # create the list of data  to send
+#                                         message = [conf.BROKER_TOPIC, sensor_location]
+#                                         # append the values in the list
+#                                         mes = []
+# #                                         print(mes_dict)
+#                                         for act_mes in mes_list:
+#                                             mes.append(mes_dict[act_mes][0])
+#                                         message.append(str(mes).replace(',',':'))
+#                                         # add the rssi to the list
+#                                         message.append(str(sta.status('rssi')))
+#                                         # create the message
+#                                         msg = ','.join(message)
+# #                                         print('msg:', msg)
+#                                         # send the message to MQTT
+#                                         client = self.mqtt_connect_and_subscribe()  # conf.BROKER_CLIENT_ID, conf.BROKER_IP, conf.BROKER_TOPIC)
+#                                         if client is not None:
+#                                             client.publish(conf.BROKER_TOPIC, msg)
+#                                             client.disconnect()
+#                                         else:
+#                                             self.log.log_error('MQTT client is None', to_print = True)
+# 
 #                                     except Exception as err:
 #                                         self.log.log_error('MQTT publish', self.log.error_detail(err), to_print = True)
 #                                         self.reset_esp32()
+                                        
                                     # init the list of data to print
-                                    txt_mes = [str(passe), self.get_formated_time(), conf.TOPIC, sensor_id, sensor_location, sensor_type]
                                     # add the values with the format
-                                    mes1 = []
+                                    payload = []
                                     for act_mes in mes_list:
-        #                                 txt_mes.append(act_mes + ':' + str(mes_dict[act_mes][1].format(mes_dict[act_mes][0])))
-                                        mes1.append(act_mes + ':' + str(mes_dict[act_mes][1].format(mes_dict[act_mes][0])))
-                                    txt_mes.append(str(mes1))
+                                        payload.append(act_mes + ':' + str(mes_dict[act_mes][1].format(mes_dict[act_mes][0])))
+                                    message = []
+                                    message = "/".join([conf.BROKER_TOPIC, sensor_id, sensor_location, sensor_type, str(payload) ])
+                                    
+                                    # send the message to MQTT
+                                    client = MQTTClient(conf.BROKER_CLIENT_ID, conf.BROKER_IP, keepalive=60)
+                                    client.connect(True)
+                                    if client is not None:
+                                        client.publish(conf.BROKER_TOPIC, message)
+                                        client.disconnect()
+                                    else:
+                                        self.log.log_error('MQTT client is None', to_print = True)
+                                        
                                     # add the RSSI and errors to the list
+                                    txt_mes = [str(passe), self.show.get_formated_time()]
+                                    txt_mes.append(message)
                                     txt_mes.append('RSSI:' + str(sta.status('rssi')))
                                     txt_mes.append('errors:' + str(self.log.counters('error')))
                                     # create the string to print and print it
@@ -524,12 +606,15 @@ class Host:
                                         
                                 else:
                                     self.log.log_error('wrong message received', to_print = True)
-#                         except Exception as err:
-#                             self.log.log_error('Main', self.log.error_detail(err), to_print = True)
-#                             self.reset_esp32()
-#         except Exception as err:
-#             self.log.log_error('Main', self.log.error_detail(err), to_print = True)
-#             self.reset_esp32()
+                        except ValueError:
+                            print('ValueError', msg)
+                            pass
+                        except Exception as err:
+                            self.log.log_error('Main', self.log.error_detail(err), to_print = True)
+                            self.reset_esp32()
+        except Exception as err:
+            self.log.log_error('Main', self.log.error_detail(err), to_print = True)
+            self.reset_esp32()
 
 def main():
     host = Host()

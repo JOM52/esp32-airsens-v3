@@ -27,11 +27,14 @@ v0.2.0 : 07.09.2022 --> log_error modified for display line error number ---> no
 -----------------------------------------------------------------------------------------
 v0.3.0 : 12.03.2023 --> ajout de la date et heure de la survenance d'une erreur
 v0.3.1 : 15.03.2023 --> amélioration des procédures log_error et error_detail
-v3.3.2 : 07.06.2023 --> correction in log_error gor OSError 
+v3.3.2 : 07.06.2023 --> correction in log_error gor OSError
+V3.3.3 : 19.04.2024 --> pris la date et l'heure sur la RTC
 """
 from sys import print_exception 
 from io import StringIO
 from utime import localtime
+from machine import RTC
+rtc = RTC()
 counter_file_name = 'counter.txt'
 error_file_name = 'errors.txt'
 
@@ -86,7 +89,7 @@ class LogAndCount:
                 return increment
             
             
-    def log_error(self, info, err_info='', to_print = False, record_time = True):
+    def log_error(self, info, err_info='', to_print = False):
         
         if err_info is not None:
             try:
@@ -115,17 +118,14 @@ class LogAndCount:
         err = s[1].strip() + ", " + s[2].strip().replace(':', ',')
         return err
 
-    def get_formated_time(self, time=None):
-        if time is None:
-            dt = localtime()
-        else:
-            dt = localtime(int(time))
-        year = '{:04d}'.format(dt[0])
-        month = '{:02d}'.format(dt[1])
-        day = '{:02d}'.format(dt[2])
-        hour = '{:02d}'.format(dt[3])
-        minute = '{:02d}'.format(dt[4])
-        second = '{:02d}'.format(dt[5])
+    def get_formated_time(self):
+        year, month, day, x, hour, minute, second, x = rtc.datetime()
+        year = '{:04d}'.format(year)
+        month = '{:02d}'.format(month)
+        day = '{:02d}'.format(day)
+        hour = '{:02d}'.format(hour)
+        minute = '{:02d}'.format(minute)
+        second = '{:02d}'.format(second)
         return day + '.' + month + '.' + year + ' ' + hour + ':' + minute + ':' + second
 
 def main():

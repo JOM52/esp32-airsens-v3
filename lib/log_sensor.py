@@ -27,15 +27,20 @@ v0.2.0 : 07.09.2022 --> log_error modified for display line error number ---> no
 -----------------------------------------------------------------------------------------
 v0.3.0 : 12.03.2023 --> ajout de la date et heure de la survenance d'une erreur
 v0.3.1 : 15.03.2023 --> amélioration des procédures log_error et error_detail
-v3.3.2 : 07.06.2023 --> correction in log_error gor OSError 
+v3.3.2 : 07.06.2023 --> correction in log_error gor OSError
+V3.3.3 : 19.04.2024 --> pris la date et l'heure sur la RTC
+v3.3.4 : 20.03.2024	--> log_error, ajouté l'option "record_time" yes-no
+v3.3.5 : 21.04.2024 --> ajouté un compteur de messages d'erreur pour éviter l'enregistrement de trop de lignes pour un seul problème
 """
 from sys import print_exception 
 from io import StringIO
-from utime import localtime
 counter_file_name = 'counter.txt'
 error_file_name = 'errors.txt'
 
-class LogAndCount:
+class LogSensors:
+    
+    def __init__(self):
+        self.msg_header = ' -<>- '
 
     def counters(self, counter_name, add1=False):
         increment = 1 if add1 else 0
@@ -84,61 +89,98 @@ class LogAndCount:
             with open(counter_file_name, 'a') as f:
                 f.write(counter_name + ':' + str(increment) + '\n')
                 return increment
+
+    def supress_msg_head(self, txt, search_str):
+        pos_find = txt.find(search_str)
+        if pos_find != -1:
+            return ((txt[pos_find + len(search_str):]).strip())
+        else:
+            return txt
             
-            
-    def log_error(self, info, err_info='', to_print = False, record_time = True):
+    def log_error(self, info, err_info='', to_print = False):
         
+        # create info message
         if err_info is not None:
             try:
                 err_info = err_info.replace(':','')
             except:
                 pass
-            info = self.get_formated_time() + ' ' + info
-        msg = info + ', ' + err_info if err_info else info
+        head = '1 time' + self.msg_header
+        error_msg = str(info + ', ' + err_info if err_info else info)
         
-        try: # test if the file exist, if yes read the data's
-            with open (error_file_name, 'a') as f:
-                f.write(msg + '\n')
+        try: # check existing file, if yes open and read the data's
+            with open (error_file_name, 'r') as f:
+                file_text = f.readlines()
         except: # file not exist --> create and initialise the counter to increment value
             with open(error_file_name, 'w') as f:
-                if msg is not str:
-                    msg = str(msg)
-                f.write(msg + '\n')
-        if to_print: print(msg)
-        self.counters('error', True)
+                f.write(head + error_msg + '\n')
+            if to_print: print(head + error_msg)
+            self.counters('error', True)
+            # the file is created so the job is finished
+            return
+        
+        # the file exists but it's empty
+        if len(file_text) == 0 :
+            with open(error_file_name, 'w') as f:
+                f.write(head + error_msg + '\n')
+            if to_print: print(head + error_msg)
+            self.counters('error', True)
+            return
+        
+        # file exists and there is already records
+        # records are in file_text
+        with open (error_file_name, 'w') as f:
+            found = False
+            for line in file_text:
+#                 line.replace('\n', '')
+                # search for a number in the line just before the first space
+                try:
+                    val = int(line[:line.find(' ')]) + 1 # increment the number
+                except:
+                    val = 1
+                # verify if the message already exist in the curent line
+                msg_short = self.supress_msg_head(error_msg, self.msg_header)
+                line_short = self.supress_msg_head(line, self.msg_header)
+                if msg_short == line_short: # the error message was found in the curent line
+                    line = str(val) + ' times' + self.msg_header + msg_short + '\n'
+                    found = True
+                    if to_print: print(line.replace('\n', ''))
+                    self.counters('error', True)
+                f.write(line)
+            # the message has not been found so add a new line
+        if not found:
+            with open (error_file_name, 'a') as f:
+                line = '1 time' + self.msg_header + msg_short + '\n'
+                f.write(line)
+                if to_print: print(line.replace('\n', ''))
+                self.counters('error', True)
 
     def error_detail(self, err_info):
-        s=StringIO()
+        s = StringIO()
         print_exception(err_info, s)  
-        s=s.getvalue()
-        s=s.split('\n')                                                                   
+        s = s.getvalue()
+        s = s.split('\n')                                                                   
         err = s[1].strip() + ", " + s[2].strip().replace(':', ',')
         return err
 
-    def get_formated_time(self, time=None):
-        if time is None:
-            dt = localtime()
-        else:
-            dt = localtime(int(time))
-        year = '{:04d}'.format(dt[0])
-        month = '{:02d}'.format(dt[1])
-        day = '{:02d}'.format(dt[2])
-        hour = '{:02d}'.format(dt[3])
-        minute = '{:02d}'.format(dt[4])
-        second = '{:02d}'.format(dt[5])
-        return day + '.' + month + '.' + year + ' ' + hour + ':' + minute + ':' + second
-
 def main():
-    logandcount = LogAndCount()
+    logsensors = LogSensors()
+    import math
     
-    try:
-        a=1/0
-    except Exception as err:
-        logandcount.log_error(info = 'test division par zero',
-                              err_info = logandcount.error_detail(err),
-                              to_print = True)
+    i = 0
+    while i < 1:
+        i += 1
+        try:
+#             f = open("xxx.txt")
+            a=1/0
+#             a = math.log(-1)
+            pass
+        except Exception as err:
+            logsensors.log_error(info = 'LogSensor test',
+                                  err_info = logsensors.error_detail(err),
+                                  to_print = True)
         
-    print('test counters', logandcount.counters('test counters', True))
+    print('test counters', logsensors.counters('test counters', True))
 
 if __name__ == '__main__':
     main()

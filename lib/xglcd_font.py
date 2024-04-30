@@ -150,10 +150,11 @@ class XglcdFont(object):
             int: length of text
         """
         length = 0
-        for letter in text:
-            # Get index of letter
-            letter_ord = ord(letter) - self.start_letter
-            offset = letter_ord * self.bytes_per_letter
-            # Add length of letter and spacing
-            length += self.letters[offset] + spacing
+        if text is not None:
+            for letter in text:
+                # Get index of letter
+                letter_ord = ord(letter) - self.start_letter
+                offset = letter_ord * self.bytes_per_letter
+                # Add length of letter and spacing
+                length += self.letters[offset] + spacing
         return length

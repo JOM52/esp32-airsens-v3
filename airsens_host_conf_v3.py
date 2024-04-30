@@ -17,27 +17,30 @@ from machine import unique_id
 #SYSTEM
 WAIT_TIME_ON_RESET = 10 # seconds to wait before the machine reset in case of error
 # MQTT
+BROKER_IP = '192.168.1.110'
 # BROKER_IP = '192.168.1.108'
-BROKER_IP = '10.0.0.120'
-TOPIC = 'airsens_v3'
+# BROKER_IP = '192.168.1.102'
+BROKER_TOPIC = 'airsens_v3'
 BROKER_CLIENT_ID = hexlify(unique_id())
-
+#TIMEZONE
+TIMEZONE = 2
 # TTGO
 BUTTON_MODE_PIN = 35
 BUTTON_PAGE_PIN = 0
-DEFAULT_MODE = 0 # Mode auto
+DEFAULT_MODE = 3 # Mode auto
+DEFAULT_PAGE = 3
 DEFAULT_ROW_ON_SCREEN = 5 # given by the display hardware and the font size
 CHOICE_TIMER_MS = 1000 # milli seconds
 BUTTON_DEBOUNCE_TIMER_MS = 10 # milli seconds
 REFRESH_SCREEN_TIMER_MS = 20000 # mode auto: display next location each ... milli seconds
 
 # WIFI
-# WIFI_SSID = 'jmb-airsens'
-# WIFI_PW = '54f-614-c3b'
+WIFI_SSID = 'jmb-airsens'
+WIFI_PW = '54f-614-c3b'
 # WIFI_SSID = 'Helix007'
 # WIFI_PW = 'Lucky001'
-WIFI_SSID = 'Desrochers2023'
-WIFI_PW = 'Gd489337'
+# WIFI_SSID = 'Desrochers2023'
+# WIFI_PW = 'Gd489337'
 
 # BATTERY
 BAT_MAX = 4.2 # 100%

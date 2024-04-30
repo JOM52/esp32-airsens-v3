@@ -87,7 +87,7 @@ class AirSensScan:
             # send a PAIRING message
             if self.espnow.send(bin_mac_adress, 'PAIRING', True):
                 while True:
-                    host, msg = self.espnow.irecv(timeout_ms=250)  # ask for pairing
+                    host, msg = self.espnow.irecv(timeout=250)  # ask for pairing
                     if msg: # msg == None if timeout in irecv()
                         decode_msg = msg.decode().split('/')
                         host = decode_msg[0]

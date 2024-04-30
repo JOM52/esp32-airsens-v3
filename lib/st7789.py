@@ -512,27 +512,28 @@ class ST7789(object):
             landscape (bool): Orientation (default: False = portrait)
             spacing (int): Pixels between letters (default: 1)
         """
-        for letter in text:
-            # Get letter array and letter dimensions
-            w, h = self.draw_letter(x, y, letter, font, color, background,
-                                    landscape)
-            # Stop on error
-            if w == 0 or h == 0:
-                print('Invalid width {0} or height {1}'.format(w, h))
-                return
+        if text is not None:
+            for letter in text:
+                # Get letter array and letter dimensions
+                w, h = self.draw_letter(x, y, letter, font, color, background,
+                                        landscape)
+                # Stop on error
+                if w == 0 or h == 0:
+                    print('Invalid width {0} or height {1}'.format(w, h))
+                    return
 
-            if landscape:
-                # Fill in spacing
-                if spacing:
-                    self.fill_hrect(x, y - w - spacing, h, spacing, background)
-                # Position y for next letter
-                y -= (w + spacing)
-            else:
-                # Fill in spacing
-                if spacing:
-                    self.fill_vrect(x + w, y, spacing, h, background)
-                # Position x for next letter
-                x += w + spacing
+                if landscape:
+                    # Fill in spacing
+                    if spacing:
+                        self.fill_hrect(x, y - w - spacing, h, spacing, background)
+                    # Position y for next letter
+                    y -= (w + spacing)
+                else:
+                    # Fill in spacing
+                    if spacing:
+                        self.fill_vrect(x + w, y, spacing, h, background)
+                    # Position x for next letter
+                    x += w + spacing
 
     def fill_rect(self, x, y, width, height, color):
         if color:

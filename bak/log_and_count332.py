@@ -86,7 +86,7 @@ class LogAndCount:
                 return increment
             
             
-    def log_error(self, info, err_info='', to_print = False, record_time = True):
+    def log_error(self, info, err_info='', to_print = False):
         
         if err_info is not None:
             try:

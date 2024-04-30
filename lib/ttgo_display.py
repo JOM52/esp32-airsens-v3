@@ -14,6 +14,7 @@ v0.1.0 : 01.01.2023 --> first prototype
 v0.1.1 : 18.01.2023 --> added verif on text lenght before displaying
 V0.1.2 : 19.01.2023 --> CORRECTED color_...
 v0.1.3 : 21.04.2023 --> added write_about_line()
+v0.1.4 : 19.04.2024 --> adapted ok_len_txt
 """
 VERSION = '0.1.3'
 PROGRAM_NAME = 'ttgo_display.py' 
@@ -72,23 +73,40 @@ class TtgoTdisplay:
         self.x_txt_0 = 240
         self.x_txt_1 = 120
         self.x_txt_2 = 55
+        self.x_txt_00 = 240
+        self.x_txt_01 = 180
+        self.x_txt_02 = 85
 
-    def ok_len_txt(self, txt_0='', txt_1='', txt_2=''):
+    def ok_len_txt(self, txt_0='', txt_1='', txt_2='', x_txt_0=240, x_txt_1=120, x_txt_2=55):
+        
         err=''
-        if self.espresso_dolce.measure_text(txt_2) > self.x_txt_2:
+        if self.espresso_dolce.measure_text(txt_2) > x_txt_2:
            err = 'txt_2 too long'
         if txt_1 and txt_2:
-            if self.espresso_dolce.measure_text(txt_1) > self.x_txt_1 - self.x_txt_2:
+            if self.espresso_dolce.measure_text(txt_1) > x_txt_1 - x_txt_2:
                 err = 'txt_1 too long'
         else:
-            if self.espresso_dolce.measure_text(txt_1) > self.x_txt_1:
+            if self.espresso_dolce.measure_text(txt_1) > x_txt_1:
                 err = 'txt_1 too long'
         if txt_0 and txt_1:
-            if self.espresso_dolce.measure_text(txt_0) > self.x_txt_0 - self.x_txt_1:
+            if self.espresso_dolce.measure_text(txt_0) > x_txt_0 - x_txt_1:
                 err = 'txt_0 too long'
         else:
-            if self.espresso_dolce.measure_text(txt_0) > self.x_txt_0:
+            if self.espresso_dolce.measure_text(txt_0) > x_txt_0:
                 err = 'txt_0 too long'
+        if err:
+            print(err)
+            len_txt_0 = self.espresso_dolce.measure_text(txt_0)
+            len_txt_1 = self.espresso_dolce.measure_text(txt_1)
+            len_txt_2 = self.espresso_dolce.measure_text(txt_2)
+            ok_0 = 'ok' if len_txt_0 <= (x_txt_0 - x_txt_1) else '!!'
+            ok_1 = 'ok' if len_txt_1 <= (x_txt_1 - x_txt_2) else '!!'
+            ok_2 = 'ok' if len_txt_2 <= x_txt_2 else '!!'
+            print(txt_0, len_txt_0, ' vs', x_txt_0 - x_txt_1, ok_0)
+            print(txt_1, len_txt_1, ' vs', x_txt_1 - x_txt_2, ok_1)
+            print(txt_2, len_txt_2, ' vs', x_txt_2, ok_2)
+            print()
+            
         return err
 
     def write_centred_line(self, line, txt, color=COLOR_WHITE, color_2=COLOR_YELLOW):
@@ -99,10 +117,6 @@ class TtgoTdisplay:
             txt = txt[:len(txt)-1]
         if txt_2_long : txt += '...'
         x_c = self.x_txt_0 - max(int((self.x_txt_0 - self.espresso_dolce.measure_text(txt)) / 2),0)
-#         print(txt,
-#               'self.espresso_dolce.measure_text(txt):', self.espresso_dolce.measure_text(txt),
-#               'self.x_txt_0:', self.x_txt_0,
-#               'x_c:', x_c)
         display.draw_text(y, x_c, txt, self.espresso_dolce, color, landscape=True)
 
     def write_about_line(self, line, txt_name, txt_value):
@@ -143,6 +157,16 @@ class TtgoTdisplay:
         else:
             display.draw_text(y, self.x_txt_0, ok_txt, self.espresso_dolce, self.COLOR_RED, landscape=True)
 
+    def write_line_lastmes(self, line, txt, val_1='', val_2='', txt_color=COLOR_CYAN, val_color=COLOR_WHITE):
+        y = line * self.line_height
+        ok_txt = self.ok_len_txt(txt, val_1, val_2, self.x_txt_00, self.x_txt_01, self.x_txt_02)
+        if ok_txt == '':
+            display.draw_text(y, self.x_txt_00, txt, self.espresso_dolce, txt_color, landscape=True)
+            display.draw_text(y, self.x_txt_01, val_1, self.espresso_dolce, val_color, landscape=True)
+            display.draw_text(y, self.x_txt_02, val_2, self.espresso_dolce, val_color, landscape=True)
+        else:
+            display.draw_text(y, self.x_txt_0, ok_txt, self.espresso_dolce, self.COLOR_RED, landscape=True)
+
     def write_line_bat(self, line, txt, val_1='', val_2='', txt_color=COLOR_GREEN, bat_color=COLOR_WHITE):
         y = line * self.line_height
         ok_txt = self.ok_len_txt(txt, val_1, val_2)
@@ -161,7 +185,8 @@ def main():
     ttgo_tdisp = TtgoTdisplay()   
     
     ttgo_tdisp.cls()
-    ttgo_tdisp.write_line(2, 'asdfghjkl', '-txt_1', '-12-fsdgth')
+#     ttgo_tdisp.write_line(2, 'asdfghjkl', 'sdfhg', '-12-fsdgth')
+    ttgo_tdisp.write_line(2, 'txt_test_0', 'test_1', 'test_2')
     sleep(1)
     ttgo_tdisp.cls()
     ttgo_tdisp.write_line(0, 'Salon','21.1', '48%', ttgo_tdisp.COLOR_CYAN)        
